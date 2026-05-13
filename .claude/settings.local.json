@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(pnpm add *)",
+      "Bash(ls \"C:\\\\Users\\\\bilal.zahid\\\\Downloads\\\\payload-block-builder\\\\payload-block-builder\\\\apps\\\\builder\\\\src\")",
+      "Read(//c/Users/bilal.zahid/Downloads/payload-block-builder/payload-block-builder/apps/builder/src/**)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\bilal.zahid\\\\Downloads\\\\payload-block-builder\\\\payload-block-builder\\\\apps\\\\builder\\\\src\" -Recurse -File)",
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(find \"C:\\\\Users\\\\bilal.zahid\\\\Downloads\\\\payload-block-builder\\\\payload-block-builder\\\\packages\\\\shared\" -name \"*.ts\" -type f)",
+      "Read(//c/Users/bilal.zahid/Downloads/payload-block-builder/payload-block-builder/packages/shared/**)"
+    ]
+  }
+}

@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+/* CSS variables for the embedded block builder */
+:root {
+  --payload-bg: #0d0d0d;
+  --payload-surface: #1a1a1a;
+  --payload-surface-2: #242424;
+  --payload-border: #2a2a2a;
+  --payload-border-hover: #404040;
+  --payload-accent: #e6c129;
+  --payload-accent-dim: rgba(230, 193, 41, 0.15);
+  --payload-text: #e0e0e0;
+  --payload-muted: #888;
+  --payload-danger: #ef4444;
+  --payload-success: #22c55e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--payload-bg);
+  color: var(--payload-text);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--payload-surface);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--payload-border-hover);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--payload-muted);
+}
+
+/* Syntax highlighting for code preview */
+.code-preview {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--payload-text);
+}
+
+.token-keyword { color: #c792ea; }
+.token-string  { color: #c3e88d; }
+.token-comment { color: #546e7a; font-style: italic; }
+.token-type    { color: #82aaff; }
+.token-punct   { color: #89ddff; }
+.token-prop    { color: #f07178; }
+
+/* DnD drag overlay */
+.drag-overlay {
+  opacity: 0.85;
+  transform: scale(1.02);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+/* Field card animations */
+.field-card {
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  background-color: var(--payload-surface);
+  border-color: var(--payload-border);
+  color: var(--payload-text);
+}
+
+.field-card:hover {
+  border-color: var(--payload-border-hover);
+}
+
+.field-card.active {
+  border-color: var(--payload-accent);
+  background-color: var(--payload-accent-dim);
+}
+
+/* Fade-in for panels */
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateX(8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.panel-enter {
+  animation: fadeSlideIn 0.2s ease forwards;
+}
