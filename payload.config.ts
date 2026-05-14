@@ -11,6 +11,9 @@ import {
   Pages,
   Media,
   SavedSections,
+  Locales,
+  HeaderLocales,
+  FooterLocales,
 } from '@/collections'
 import { Header, Footer, Theme } from '@/globals'
 
@@ -31,7 +34,8 @@ export default buildConfig({
       url: ({ data }) => {
         const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL ?? 'http://localhost:3000'
         const slug = (data?.slug as string) ?? '/'
-        return `${serverUrl}/api/draft?slug=${encodeURIComponent(slug)}`
+        const localeCode = (data?.locale as { code?: string } | null)?.code ?? 'en'
+        return `${serverUrl}/api/draft?slug=${encodeURIComponent(slug)}&locale=${encodeURIComponent(localeCode)}`
       },
       collections: ['pages'],
       breakpoints: [
@@ -42,6 +46,9 @@ export default buildConfig({
     },
   },
   collections: [
+    Locales,
+    HeaderLocales,
+    FooterLocales,
     BlockDefinitions,
     BlockDefinitionVersions,
     Pages,

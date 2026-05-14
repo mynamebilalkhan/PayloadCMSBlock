@@ -8,7 +8,24 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\bilal.zahid\\\\Downloads\\\\payload-block-builder\\\\payload-block-builder\\\\apps\\\\builder\\\\src\" -Recurse -File)",
       "Bash(Select-Object -ExpandProperty FullName)",
       "Bash(find \"C:\\\\Users\\\\bilal.zahid\\\\Downloads\\\\payload-block-builder\\\\payload-block-builder\\\\packages\\\\shared\" -name \"*.ts\" -type f)",
-      "Read(//c/Users/bilal.zahid/Downloads/payload-block-builder/payload-block-builder/packages/shared/**)"
+      "Read(//c/Users/bilal.zahid/Downloads/payload-block-builder/payload-block-builder/packages/shared/**)",
+      "Bash(Get-ChildItem -Path \"d:\\\\Bilal\\\\eProjects\\\\vTeams\\\\PayloadCMSTwo\" -Directory)",
+      "Bash(Select-Object Name)",
+      "Bash(Get-ChildItem -Path \"d:\\\\Bilal\\\\eProjects\\\\vTeams\\\\PayloadCMSTwo\" -Force)",
+      "Bash(Select-Object Name, FullName)",
+      "Bash(Get-ChildItem \"d:\\\\Bilal\\\\eProjects\\\\vTeams\\\\PayloadCMSTwo\\\\src\\\\migrations\" -ErrorAction SilentlyContinue)",
+      "Bash(Format-Table -AutoSize)",
+      "Bash(mkdir -p \"d:/Bilal/eProjects/vTeams/PayloadCMSTwo/src/app/\\(frontend\\)/[locale]/[[...slug]]\")",
+      "Bash(rm -rf \"d:/Bilal/eProjects/vTeams/PayloadCMSTwo/src/app/\\(frontend\\)/[[...slug]]\")",
+      "Bash(npx tsc *)",
+      "Bash(npx payload *)",
+      "Bash(grep -v \"^$\")",
+      "Bash(rm -rf \"d:/Bilal/eProjects/vTeams/PayloadCMSTwo/.next/types/app/\\(frontend\\)/[[...slug]]\" 2>/dev/null; echo \"done\")"
+    ],
+    "additionalDirectories": [
+      "d:\\Bilal\\eProjects\\vTeams\\PayloadCMSTwo\\src\\app\\(frontend)\\[locale]",
+      "d:\\Bilal\\eProjects\\vTeams\\PayloadCMSTwo\\src\\app\\(frontend)\\[[...slug]]",
+      "d:\\Bilal\\eProjects\\vTeams\\PayloadCMSTwo\\.next\\types\\app\\(frontend)\\[[...slug]]"
     ]
   }
 }

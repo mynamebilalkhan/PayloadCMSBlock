@@ -1,4 +1,5 @@
 import type { CollectionConfig } from 'payload'
+import { randomUUID } from 'crypto'
 
 import { Testimonials } from '@/blocks/Generic/Testimonials/config'
 import { hero } from '../heros/config'
@@ -27,10 +28,13 @@ export const Pages: CollectionConfig = {
     useAsTitle: 'title',
     group: 'Content',
     description: 'Site pages composed from dynamic block instances.',
-    defaultColumns: ['title', 'slug', 'status', 'updatedAt'],
+    defaultColumns: ['title', 'slug', 'locale', 'status', 'updatedAt'],
     preview: (doc) => {
       const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL ?? 'http://localhost:3000'
-      return `${serverUrl}/${doc.slug}`
+      const localeCode = (doc?.locale as { code?: string } | null)?.code ?? 'en'
+      const slug = (doc?.slug as string) ?? '/'
+      const path = slug === '/' ? '' : `/${slug}`
+      return `${serverUrl}/${localeCode}${path}`
     },
   },
   access: {
@@ -50,6 +54,10 @@ export const Pages: CollectionConfig = {
             .replace(/[^a-z0-9/]+/g, '-')
             .replace(/^-|-$/g, '')
         }
+        // Auto-generate translationGroupId on create (not on update)
+        if (!data.translationGroupId) {
+          data.translationGroupId = randomUUID()
+        }
         return data
       },
     ],
@@ -66,13 +74,66 @@ export const Pages: CollectionConfig = {
       name: 'slug',
       type: 'text',
       required: true,
-      unique: true,
       label: 'Slug',
-      admin: { description: 'URL path, e.g. "about-us". Use "/" for the homepage.' },
-      validate: (value: string | null | undefined) => {
+      admin: { description: 'URL path, e.g. "about-us". Use "/" for the homepage. Must be unique per locale.' },
+      validate: async (value: string | null | undefined, { req, data, id }: { req: import('payload').PayloadRequest, data: Record<string, unknown>, id?: string | number }) => {
         if (!value) return 'Slug is required.'
         if (!/^[a-z0-9/-]+$/.test(value)) return 'Slug must be lowercase with hyphens or slashes.'
+        const localeId = data?.locale
+        if (!localeId) return true // locale not yet set — skip compound check
+        const existing = await req.payload.find({
+          collection: 'pages',
+          where: {
+            slug: { equals: value },
+            locale: { equals: localeId as string },
+            ...(id ? { id: { not_equals: id } } : {}),
+          },
+          limit: 1,
+        })
+        if (existing.totalDocs > 0) return `A page with slug "${value}" already exists for this locale.`
         return true
+      },
+    },
+    // ─── Locale & Translation ──────────────────────────────────────────────────
+    {
+      name: 'locale',
+      type: 'relationship',
+      relationTo: 'locales',
+      required: false, // nullable during initial migration; set to true after all pages have a locale
+      label: 'Locale',
+      admin: {
+        description: 'The language this page is written in.',
+        position: 'sidebar',
+      },
+    },
+    {
+      name: 'translationGroupId',
+      type: 'text',
+      label: 'Translation Group ID',
+      admin: {
+        description: 'UUID shared across all locale variants of the same page. Auto-generated on create.',
+        readOnly: true,
+        position: 'sidebar',
+      },
+    },
+    {
+      name: 'translationStatus',
+      type: 'ui',
+      admin: {
+        position: 'sidebar',
+        components: {
+          Field: '@/components/admin/TranslationStatus#TranslationStatus',
+        },
+      },
+    },
+    {
+      name: 'duplicateForLocale',
+      type: 'ui',
+      admin: {
+        position: 'sidebar',
+        components: {
+          Field: '@/components/admin/DuplicateForLocale#DuplicateForLocale',
+        },
       },
     },
     {
