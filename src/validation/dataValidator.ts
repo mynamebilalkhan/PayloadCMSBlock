@@ -25,7 +25,7 @@ type FieldError = { path: string; message: string }
  */
 function mergeValidation(field: BlockField): ValidationRules {
   const v = field.validation ?? {}
-  const f = field as Record<string, unknown>
+  const f = field as unknown as Record<string, unknown>
 
   return {
     required: v.required ?? (field.required ? true : undefined),

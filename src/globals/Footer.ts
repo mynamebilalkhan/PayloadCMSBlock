@@ -72,7 +72,7 @@ export const Footer: GlobalConfig = {
         },
         {
           name: 'url',
-          type: 'url',
+          type: 'text',
           label: 'URL',
         },
       ],

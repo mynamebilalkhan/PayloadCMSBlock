@@ -170,7 +170,7 @@ export function FeaturesBlock({ data, anchor }: BlockComponentProps<FeaturesData
 
 // ─── Icon system ──────────────────────────────────────────────────────────────
 
-const iconPaths: Record<string, JSX.Element> = {
+const iconPaths: Record<string, React.ReactElement> = {
   zap:      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />,
   shield:   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />,
   layers:   <><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></>,

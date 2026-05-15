@@ -1,4 +1,5 @@
 import type { Payload, PayloadRequest, TypedUser } from 'payload'
+import type { Page } from '../../../payload-types'
 
 import {
   coerceRelationshipId,
@@ -161,7 +162,10 @@ export async function duplicatePageForLocale({
   const { dbLayout, contentBlocks } = sanitizePageCopyForCreate({
     dbLayout: sourcePage.dbLayout,
     contentBlocks: sourcePage.contentBlocks,
-  })
+  }) as {
+    dbLayout: Page['dbLayout']
+    contentBlocks: Page['contentBlocks']
+  }
   const afterSanitize = sampleArrayRowIds({ dbLayout, contentBlocks })
 
   // #region agent log
