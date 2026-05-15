@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 import { randomUUID } from 'crypto'
 
+import { coerceRelationshipId } from '@/lib/payload/coerceRelationshipId'
 import { Testimonials } from '@/blocks/Generic/Testimonials/config'
 import { hero } from '../heros/config'
 
@@ -28,7 +29,14 @@ export const Pages: CollectionConfig = {
     useAsTitle: 'title',
     group: 'Content',
     description: 'Site pages composed from dynamic block instances.',
-    defaultColumns: ['title', 'slug', 'locale', 'status', 'updatedAt'],
+    defaultColumns: ['title', 'slug', 'status', 'updatedAt'],
+    components: {
+      views: {
+        list: {
+          Component: '@/components/admin/PagesGroupedList#PagesGroupedList',
+        },
+      },
+    },
     preview: (doc) => {
       const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL ?? 'http://localhost:3000'
       const localeCode = (doc?.locale as { code?: string } | null)?.code ?? 'en'
@@ -53,6 +61,9 @@ export const Pages: CollectionConfig = {
             .trim()
             .replace(/[^a-z0-9/]+/g, '-')
             .replace(/^-|-$/g, '')
+        }
+        if (data.locale != null && data.locale !== '') {
+          data.locale = coerceRelationshipId(data.locale as string | number)
         }
         // Auto-generate translationGroupId on create (not on update)
         if (!data.translationGroupId) {
@@ -81,11 +92,12 @@ export const Pages: CollectionConfig = {
         if (!/^[a-z0-9/-]+$/.test(value)) return 'Slug must be lowercase with hyphens or slashes.'
         const localeId = data?.locale
         if (!localeId) return true // locale not yet set — skip compound check
+        const coercedLocaleId = coerceRelationshipId(localeId as string | number)
         const existing = await req.payload.find({
           collection: 'pages',
           where: {
             slug: { equals: value },
-            locale: { equals: localeId as string },
+            locale: { equals: coercedLocaleId },
             ...(id ? { id: { not_equals: id } } : {}),
           },
           limit: 1,
@@ -99,11 +111,14 @@ export const Pages: CollectionConfig = {
       name: 'locale',
       type: 'relationship',
       relationTo: 'locales',
-      required: false, // nullable during initial migration; set to true after all pages have a locale
+      required: true,
       label: 'Locale',
       admin: {
-        description: 'The language this page is written in.',
+        description: 'Switch language to open that translation. Each locale is a separate page document.',
         position: 'sidebar',
+        components: {
+          Field: '@/components/admin/PageLocaleField#PageLocaleField',
+        },
       },
     },
     {

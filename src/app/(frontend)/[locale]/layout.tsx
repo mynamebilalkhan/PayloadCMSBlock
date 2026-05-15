@@ -107,16 +107,19 @@ export default async function LocaleLayout({
   const themeCSS = tokensToCSS(theme)
   const googleFontsURL = buildGoogleFontsURL(theme)
 
+  // Always load Nextbridge brand fonts
+  const nbFontsURL =
+    'https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Michroma&display=swap'
+
   return (
     <LocaleProvider locale={localeData}>
       <html lang={localeCode} dir={localeData.isRTL ? 'rtl' : 'ltr'}>
         <head>
-          {googleFontsURL && (
-            <>
-              <link rel="preconnect" href="https://fonts.googleapis.com" />
-              <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-              <link rel="stylesheet" href={googleFontsURL} />
-            </>
+          <link rel="preconnect" href="https://fonts.googleapis.com" />
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+          <link rel="stylesheet" href={nbFontsURL} />
+          {googleFontsURL && googleFontsURL !== nbFontsURL && (
+            <link rel="stylesheet" href={googleFontsURL} />
           )}
           <style dangerouslySetInnerHTML={{ __html: themeCSS }} />
         </head>

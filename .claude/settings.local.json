@@ -20,7 +20,19 @@
       "Bash(npx tsc *)",
       "Bash(npx payload *)",
       "Bash(grep -v \"^$\")",
-      "Bash(rm -rf \"d:/Bilal/eProjects/vTeams/PayloadCMSTwo/.next/types/app/\\(frontend\\)/[[...slug]]\" 2>/dev/null; echo \"done\")"
+      "Bash(rm -rf \"d:/Bilal/eProjects/vTeams/PayloadCMSTwo/.next/types/app/\\(frontend\\)/[[...slug]]\" 2>/dev/null; echo \"done\")",
+      "Bash(Get-ChildItem -Path \"D:\\\\Bilal\\\\eProjects\\\\vTeams\\\\Nextbridge Design\\\\files\" -Recurse -File)",
+      "Bash(Select-Object FullName, Extension)",
+      "Bash(Sort-Object Extension)",
+      "Bash(find \"D:\\\\Bilal\\\\eProjects\\\\vTeams\\\\Nextbridge Design\\\\files\" -type f | sort)",
+      "Read(//d/Bilal/eProjects/vTeams/Nextbridge Design/files/**)",
+      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && head -40 \"{}\"')",
+      "Bash(Get-ChildItem \"src/app/\\(frontend\\)/[locale]\" -Name)",
+      "Bash(Sort-Object)",
+      "Bash(pnpm build *)",
+      "Bash(pnpm dev *)",
+      "Bash(rm \"d:/Bilal/eProjects/vTeams/PayloadCMSTwo/src/app/\\(frontend\\)/[locale]/page.tsx\")",
+      "Bash(mkdir -p \"d:/Bilal/eProjects/vTeams/PayloadCMSTwo/src/app/\\(frontend\\)/[locale]/_home\")"
     ],
     "additionalDirectories": [
       "d:\\Bilal\\eProjects\\vTeams\\PayloadCMSTwo\\src\\app\\(frontend)\\[locale]",

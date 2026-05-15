@@ -90,7 +90,7 @@ function SortableBlock({
   onRemove,
   onDataChange,
 }: SortableBlockProps) {
-  const blockId = block.id ?? `block-${index}`
+  const blockId = block?.id ?? `block-${index}`
 
   const {
     attributes,
@@ -222,7 +222,10 @@ function SortableBlock({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function BlocksFieldInput({ field, value, onChange, readOnly }: Props) {
-  const blocks: NestedBlockValue[] = Array.isArray(value) ? value : []
+  // Filter out null/undefined items — they cause `b.id` to throw during render or drag
+  const blocks: NestedBlockValue[] = Array.isArray(value)
+    ? value.filter((b): b is NestedBlockValue => b != null)
+    : []
 
   const [schemas, setSchemas]           = useState<Record<string, BlockSchema | null>>({})
   const [loadingSchemas, setLoading]    = useState(false)
@@ -329,14 +332,14 @@ export function BlocksFieldInput({ field, value, onChange, readOnly }: Props) {
         <SortableContext items={blockIds} strategy={verticalListSortingStrategy}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
             {blocks.map((block, index) => {
-              const blockId = block.id ?? `block-${index}`
+              const blockId = block?.id ?? `block-${index}`
               return (
                 <SortableBlock
                   key={blockId}
                   block={block}
                   index={index}
                   total={blocks.length}
-                  schema={schemas[block.blockType]}
+                  schema={schemas[block?.blockType]}
                   loadingSchemas={loadingSchemas}
                   collapsed={collapsed.has(blockId)}
                   readOnly={readOnly}

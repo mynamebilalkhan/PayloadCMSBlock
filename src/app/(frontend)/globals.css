@@ -1,1 +1,64 @@
 @import "tailwindcss";
+
+@theme {
+  /* ── Brand Colors ── */
+  --color-nb-bg: #FAFAF8;
+  --color-nb-text: #1A1A18;
+  --color-nb-text-secondary: #6B6B63;
+  --color-nb-divider: #E0DED8;
+  --color-nb-highlight: #C8A96E;
+  --color-nb-dark: #1A1A18;
+  --color-nb-dark-text: #FAFAF8;
+  --color-nb-dark-muted: #A8A89E;
+  --color-nb-photo-bg: #E8E6E0;
+
+  /* ── Font Families ── */
+  --font-family-sans: 'DM Sans', -apple-system, system-ui, sans-serif;
+  --font-family-heading: 'Michroma', 'DM Sans', sans-serif;
+
+  /* ── Custom Animations ── */
+  --animate-fade-up: fadeUp 1s ease forwards;
+  --animate-pulse-line: pulseLine 2s ease infinite;
+  --animate-blink: blink 2s ease infinite;
+}
+
+/* ── Keyframes ── */
+@keyframes fadeUp {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseLine {
+  0%   { top: -100%; }
+  50%  { top: 100%; }
+  100% { top: 100%; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+/* ── Reveal animation (IntersectionObserver driven) ── */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ── Base ── */
+html {
+  scroll-behavior: smooth;
+  font-size: 16px;
+}
+
+body {
+  font-family: var(--font-family-sans);
+  background-color: var(--color-nb-bg);
+  color: var(--color-nb-text);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}

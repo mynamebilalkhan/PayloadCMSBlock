@@ -24,11 +24,16 @@ export default buildConfig({
   serverURL: process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000',
   admin: {
     user: 'users',
+    // Payload array fields (dbLayout) use useId for dnd-kit; React 19 SSR can mismatch without this
+    suppressHydrationWarning: true,
     importMap: {
       baseDir: path.resolve(dirname),
     },
     meta: {
       titleSuffix: '— Block System',
+    },
+    components: {
+      afterNavLinks: ['@/components/admin/BlockBuilderNavLink#BlockBuilderNavLink'],
     },
     livePreview: {
       url: ({ data }) => {

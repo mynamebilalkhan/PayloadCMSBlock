@@ -3,11 +3,13 @@ import { draftMode } from 'next/headers'
 import { getPayload } from 'payload'
 import type { Where } from 'payload'
 import config from '@payload-config'
+import { getDefaultLocale } from '@/lib/locale'
 import { DynamicRenderer } from '@/renderer'
 import type { PopulatedBlockInstance } from '@/renderer'
 import { RenderContentBlocks } from '@/blocks/RenderContentBlocks'
 import { RenderHero } from '@/heros/RenderHero'
 import { LivePreviewListener } from '@/components/LivePreviewListener'
+import { HomePageContent } from '@/app/(frontend)/[locale]/_home/HomePageContent'
 import type { Metadata } from 'next'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -76,18 +78,22 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
         limit: 50,
       })
 
+      const defaultLocale = await getDefaultLocale()
+      const buildUrl = (code: string, path: string) =>
+        code === defaultLocale.code ? `${serverUrl}${path || '/'}` : `${serverUrl}/${code}${path}`
+
       const languages: Record<string, string> = {}
       for (const variant of variants.docs) {
         const variantLocaleCode = (variant.locale as { code?: string } | null)?.code
         if (!variantLocaleCode) continue
         const variantSlug = variant.slug as string
         const path = variantSlug === '/' ? '' : `/${variantSlug}`
-        languages[variantLocaleCode] = `${serverUrl}/${variantLocaleCode}${path}`
+        languages[variantLocaleCode] = buildUrl(variantLocaleCode, path)
       }
 
       const canonicalPath = slug === '/' ? '' : `/${slug}`
       alternates = {
-        canonical: `${serverUrl}/${localeCode}${canonicalPath}`,
+        canonical: buildUrl(localeCode, canonicalPath),
         languages,
       }
     } catch {
@@ -159,6 +165,9 @@ export default async function LocaleFrontendPage({ params }: { params: Params })
 
   const { isEnabled: isDraftMode } = await draftMode()
   const page = await getPage(slug, localeCode, isDraftMode)
+
+  // Fall back to static homepage when no CMS page exists for the root path
+  if (!page && slug === '/') return <HomePageContent />
   if (!page) notFound()
 
   const dbLayout = (page.dbLayout ?? []) as unknown as PopulatedBlockInstance[]

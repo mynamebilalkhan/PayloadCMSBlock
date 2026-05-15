@@ -45,7 +45,7 @@ export const config = {
      * - /_next/* — Next.js internals
      * - /favicon.ico, /robots.txt, /sitemap.xml, static assets
      */
-    '/((?!api|admin|_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|otf|css|js)).*)',
+    '/((?!api|admin|block-builder|_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|otf|css|js)).*)',
   ],
 }
 
@@ -56,17 +56,24 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
 
   const firstSegment = segments[0]
 
-  // Root path "/" → redirect to /{defaultCode}/
-  if (!firstSegment) {
-    return NextResponse.redirect(new URL(`/${defaultCode}`, req.url))
+  // If the DB has no enabled locales yet, treat defaultCode as the only valid code
+  const validCodes = codes.length > 0 ? codes : [defaultCode]
+
+  // Path starts with the default locale prefix (e.g. /en or /en/our-story)
+  // → redirect to the clean URL without the prefix
+  if (firstSegment === defaultCode) {
+    const rest = segments.slice(1).join('/')
+    const cleanPath = rest ? `/${rest}` : '/'
+    return NextResponse.redirect(new URL(cleanPath, req.url))
   }
 
-  // First segment is a valid locale code → pass through
-  if (codes.includes(firstSegment)) {
+  // Path starts with a non-default locale code (e.g. /fr/our-story)
+  // → pass through unchanged
+  if (validCodes.includes(firstSegment)) {
     return NextResponse.next()
   }
 
-  // No locale prefix → prepend default locale
-  const rest = segments.join('/')
-  return NextResponse.redirect(new URL(`/${defaultCode}/${rest}`, req.url))
+  // No locale prefix (including root "/") → rewrite to default locale internally.
+  // The browser URL stays as-is; Next.js routes it under [locale]=defaultCode.
+  return NextResponse.rewrite(new URL(`/${defaultCode}${pathname}`, req.url))
 }

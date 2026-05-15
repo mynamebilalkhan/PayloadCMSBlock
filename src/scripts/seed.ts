@@ -140,6 +140,17 @@ async function seed() {
 
   console.log('\nChecking home page...')
 
+  const defaultLocaleResult = await payload.find({
+    collection: 'locales',
+    where: { isDefault: { equals: true } },
+    limit: 1,
+  })
+  const defaultLocale = defaultLocaleResult.docs[0]
+  if (!defaultLocale) {
+    console.error('\n✗ No default locale found. Run migrations or create a locale in Admin first.')
+    process.exit(1)
+  }
+
   const existing = await payload.find({
     collection: 'pages',
     where: { slug: { equals: '/' } },
@@ -150,6 +161,7 @@ async function seed() {
   const pageData: any = {
     title: 'Home',
     slug: '/',
+    locale: defaultLocale.id,
     status: 'published',
     seo: {
       metaTitle: 'Dynamic Block Site — Build faster with blocks',

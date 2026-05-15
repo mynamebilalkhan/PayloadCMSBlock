@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getPayload } from 'payload'
+import { ValidationError } from 'payload'
 import config from '@payload-config'
-import { randomUUID } from 'crypto'
+
+import { duplicatePageForLocale } from '@/lib/admin/duplicatePageForLocale'
 
 /**
  * POST /api/admin/duplicate-page-locale
  *
- * Duplicates an existing page document for a target locale.
- * The new page inherits the same translationGroupId, title, dbLayout, and
- * contentBlocks — slug is adjusted if a conflict exists.
- *
+ * Duplicates an existing page for a different locale.
  * Body: { pageId: string | number, targetLocaleId: string | number }
  */
 export async function POST(req: NextRequest) {
@@ -24,98 +23,43 @@ export async function POST(req: NextRequest) {
     const body = await req.json() as { pageId?: string | number; targetLocaleId?: string | number }
     const { pageId, targetLocaleId } = body
 
-    if (!pageId || !targetLocaleId) {
+    if (!pageId || targetLocaleId == null || targetLocaleId === '') {
       return NextResponse.json(
         { error: 'pageId and targetLocaleId are required.' },
         { status: 400 },
       )
     }
 
-    // Fetch the source page
-    const sourcePage = await payload.findByID({
-      collection: 'pages',
-      id: pageId,
-      depth: 1,
+    const result = await duplicatePageForLocale({
+      payload,
+      user,
+      pageId,
+      targetLocaleId,
     })
 
-    if (!sourcePage) {
-      return NextResponse.json({ error: 'Source page not found.' }, { status: 404 })
-    }
-
-    // Fetch the target locale
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const targetLocale = await (payload.findByID as any)({
-      collection: 'locales',
-      id: targetLocaleId,
-    }) as { id: string | number; name: string; code: string } | null
-
-    if (!targetLocale) {
-      return NextResponse.json({ error: 'Target locale not found.' }, { status: 404 })
-    }
-
-    // Check if a translation already exists for this group + target locale
-    const translationGroupId = sourcePage.translationGroupId as string
-    const existing = await payload.find({
-      collection: 'pages',
-      where: {
-        translationGroupId: { equals: translationGroupId },
-        locale: { equals: targetLocaleId },
-      },
-      limit: 1,
-    })
-
-    if (existing.totalDocs > 0) {
+    if (!result.ok) {
       return NextResponse.json(
         {
-          error: `A translation in "${targetLocale.name}" already exists for this page.`,
-          existingId: existing.docs[0].id,
+          error: result.error,
+          ...(result.existingId != null ? { existingId: result.existingId } : {}),
         },
-        { status: 409 },
+        { status: result.status },
       )
     }
 
-    // Determine slug — append the locale code if a slug conflict exists
-    const baseSlug = sourcePage.slug as string
-    const localeCode = targetLocale.code as string
-    let candidateSlug = baseSlug
-
-    const slugConflict = await payload.find({
-      collection: 'pages',
-      where: {
-        slug: { equals: candidateSlug },
-        locale: { equals: targetLocaleId },
-      },
-      limit: 1,
-    })
-
-    if (slugConflict.totalDocs > 0) {
-      candidateSlug = `${baseSlug}-${localeCode}`
-    }
-
-    // Create the new page (cast to bypass strict payload type checking on unknown fields)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const newPage = await (payload.create as any)({
-      collection: 'pages',
-      data: {
-        title: sourcePage.title as string,
-        slug: candidateSlug,
-        status: 'draft', // always start as draft
-        locale: targetLocaleId,
-        translationGroupId,
-        seo: sourcePage.seo,
-        dbLayout: sourcePage.dbLayout,
-        contentBlocks: sourcePage.contentBlocks,
-      },
-    })
-
     return NextResponse.json({
       success: true,
-      pageId: newPage.id,
-      slug: newPage.slug,
-      message: `Page duplicated for "${targetLocale.name}". Slug: ${newPage.slug}`,
+      pageId: result.pageId,
+      slug: result.slug,
     })
   } catch (err) {
+    if (err instanceof ValidationError) {
+      console.error('[duplicate-page-locale] validation:', err.data)
+      return NextResponse.json({ error: err.message }, { status: 400 })
+    }
+
     console.error('[duplicate-page-locale]', err)
-    return NextResponse.json({ error: 'Internal server error.' }, { status: 500 })
+    const message = err instanceof Error ? err.message : 'Internal server error.'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

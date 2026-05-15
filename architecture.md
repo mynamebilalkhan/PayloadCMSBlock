@@ -7,7 +7,9 @@ A Payload CMS 3.76 + Next.js 15 App Router project for managing site pages with 
 - A **runtime versioned block system** where block schemas live in the database. Pages store block instances that pin to immutable schema versions, so schema changes do not break existing content.
 - A **Payload-native page authoring path** in `Pages.ts` that adds a `hero` group and a Payload `blocks` field for configured blocks such as `Testimonials`.
 
-Both paths are rendered by the frontend route. The runtime block system has been extended with four features: conditional field logic, advanced validation rules, visual UI metadata (tabbed/grid admin layout), and nested/composable blocks. The admin panel supports **Live Preview** — an embedded iframe that re-renders the frontend on every document save so editors can preview draft content in real time. The frontend shell (header, footer) is managed via **Payload Globals** and rendered in the async App Router layout.
+Both paths are rendered by the frontend route. The runtime block system has been extended with four features: conditional field logic, advanced validation rules, visual UI metadata (tabbed/grid admin layout), and nested/composable blocks. The admin panel supports **Live Preview** — an embedded iframe that re-renders the frontend on every document save so editors can preview draft content in real time.
+
+The site is **multilingual**: enabled languages live in the **`locales`** collection; middleware and `[locale]` routing resolve URL prefixes; each **page** belongs to one locale and links to sibling translations via **`translationGroupId`**. Editors duplicate pages into other locales with **Translate to…** in the admin sidebar. The frontend shell (header, footer) is configured per locale via **`header-locales`** / **`footer-locales`** collections; the **theme** global is shared across all locales.
 
 A **visual block builder** is embedded at `/block-builder` (same port, no separate process). It provides a drag-and-drop GUI for designing block schemas and publishing them directly to the database. Existing blocks can be loaded back into the builder from the Payload admin via the "Edit in Block Builder" button, enabling a full re-versioning round-trip.
 
@@ -73,7 +75,16 @@ Write-once schema snapshots. Each schema change creates a new version document; 
 
 Page metadata plus authoring fields for both the runtime block system and the newer Payload-native content model.
 
-**Meta fields:** `title`, `slug` (auto-normalized), `status` (`draft` / `published` / `archived`)
+**Meta fields:** `title`, `slug` (auto-normalized, unique per locale), `status` (`draft` / `published` / `archived`)
+
+**Locale & translation (sidebar):**
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `locale` | relationship → `locales` | **Required.** Language this page is written in |
+| `translationGroupId` | text (read-only) | UUID shared by all variants; auto-generated on create if missing |
+| `translationStatus` | ui | Custom component: lists enabled locales and translation coverage |
+| `duplicateForLocale` | ui | Custom component: **Translate to…** modal to create a draft copy in another locale |
 
 **SEO group:** `seo.metaTitle`, `seo.metaDescription`, `seo.ogImage` (upload), `seo.noIndex`
 
@@ -100,7 +111,133 @@ Page metadata plus authoring fields for both the runtime block system and the ne
 
 **Access and hooks:**
 - Public reads are limited to `status: 'published'`; authenticated users can read drafts.
-- `beforeChange` normalizes slugs to lowercase path-safe strings.
+- `beforeChange` normalizes slugs to lowercase path-safe strings, coerces `locale` to a numeric relationship ID when present (PostgreSQL), and auto-assigns `translationGroupId` on create.
+- Slug `validate` checks uniqueness per `(slug, locale)` using `coerceRelationshipId` for query consistency.
+
+**Database:** Migration `20250514000000_locale_system` adds a compound unique index `pages_slug_locale_unique` on `(slug, locale_id)`.
+
+---
+
+## Locales & Multilingual Pages
+
+### `locales` — Site languages
+**File:** `src/collections/Locales.ts`
+
+Admin group: **Site Settings**. Defines every language the site can serve.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `name` | text | Display name, e.g. "English", "Urdu" |
+| `code` | text (unique) | BCP-47-style code used in URLs, e.g. `en`, `ur` — normalized to lowercase |
+| `isDefault` | checkbox | Exactly one locale should be default; hook unsets others when a new default is saved |
+| `isEnabled` | checkbox | Disabled locales return 404 on the frontend |
+| `isRTL` | checkbox | Sets `dir="rtl"` on `<html>` for this locale |
+| `sortOrder` | number | Order in admin lists and locale pickers |
+| `flag` | text | Optional emoji shown in admin UI |
+
+**Hooks:** `afterChange` calls `revalidateTag('locales')` so middleware and `getLocales()` pick up changes.
+
+The **default locale must exist as a row** in this collection (e.g. English with `isDefault: true`). It is not a separate config flag outside the table.
+
+---
+
+### `header-locales` / `footer-locales` — Per-locale shell
+**Files:** `src/collections/HeaderLocales.ts`, `src/collections/FooterLocales.ts`
+
+One document per locale (unique `locale` relationship). The `[locale]/layout.tsx` fetches these by locale ID, with fallback to the default locale's header/footer if a locale-specific record is missing.
+
+---
+
+### Relationship ID coercion (PostgreSQL)
+**File:** `src/lib/payload/coerceRelationshipId.ts`
+
+Payload's Postgres adapter uses **numeric** document IDs. JSON request bodies and HTML form fields often send IDs as **strings**. SQL `equals` filters frequently still match, but **relationship validation on `create`/`update` rejects string IDs**.
+
+```ts
+coerceRelationshipId(value)   // "2" → 2, leaves non-numeric strings as-is
+relationshipIdsEqual(a, b)    // compare across string/number mismatch
+```
+
+Used in `Pages` hooks/validators, `duplicatePageForLocale`, and the duplicate admin UI when posting `targetLocaleId`.
+
+---
+
+### Page translation workflow
+
+**Goal:** One logical page (e.g. Home) exists as **separate CMS documents per locale**, linked by `translationGroupId`, each with its own slug (typically the same path, e.g. `/` for home in every locale).
+
+```mermaid
+sequenceDiagram
+  participant Editor
+  participant UI as DuplicateForLocale
+  participant API as duplicate-page-locale
+  participant Lib as duplicatePageForLocale
+  participant Payload
+
+  Editor->>UI: Translate to… select Urdu
+  UI->>API: POST pageId targetLocaleId
+  API->>Lib: authenticated user
+  Lib->>Payload: create draft page locale=targetLocale.id
+  Payload-->>Editor: redirect to new page
+```
+
+**Admin steps:**
+1. Configure locales in **Site Settings → Locales** (include default language).
+2. Create/edit a page, set **Locale**, **Save** (generates `translationGroupId`).
+3. Sidebar **Translations** shows coverage; **Translate to…** or **Create** opens the duplicate modal.
+4. Edit the new **draft**, then **Publish**.
+
+**Core logic:** `src/lib/admin/duplicatePageForLocale.ts`
+
+| Step | Rule |
+|------|------|
+| Source | Load page at `depth: 0`; require `translationGroupId` |
+| Same locale | 400 — cannot translate into the current locale |
+| Target locale | Must exist and be `isEnabled` |
+| Duplicate in group | 409 with `existingId` if group + locale already has a page |
+| Slug | Copy source slug; on conflict append `-{code}` except homepage |
+| Homepage `/` | Never produce `/-ur`; 409 if `/` already exists for target locale |
+| Create | `status: 'draft'`, `locale: targetLocale.id` (numeric), copy `title`, `seo`, `dbLayout`, `contentBlocks` |
+
+**API:** `POST /api/admin/duplicate-page-locale` — see [API Routes](#post-apiadminduplicate-page-locale).
+
+---
+
+### Locale routing (middleware + frontend)
+
+**Middleware:** `src/middleware.ts`
+
+- Loads enabled codes + default from `GET /api/internal/locales` (Edge-safe; 60s cache).
+- **Default locale:** strips prefix from URL (`/en/about` → `/about`).
+- **Other locales:** passes through (`/ur/about`).
+- **Unprefixed paths:** rewrites to `/{defaultLocale}{pathname}` internally so `[locale]` always resolves.
+
+**Internal locales API:** `src/app/api/internal/locales/route.ts` — returns `{ codes, defaultCode }` for middleware.
+
+**Locale utilities:** `src/lib/locale/index.ts` — `getLocales()`, `getDefaultLocale()`, `validateLocale()`, cached with tag `locales`.
+
+**Frontend layout:** `src/app/(frontend)/[locale]/layout.tsx`
+
+- Validates locale code; `notFound()` if disabled/unknown.
+- Wraps children in `LocaleProvider` (RTL, code).
+- Loads `header-locales`, `footer-locales`, and global `theme`.
+- Renders `SiteHeader` / `SiteFooter`.
+
+**Catch-all page:** `src/app/(frontend)/[locale]/[[...slug]]/page.tsx`
+
+- Resolves `slug` (`/` when empty).
+- `getPage(slug, localeCode, isDraft)` finds locale by `code`, then page by `slug` + `locale` + `status`.
+- Root `/` with no CMS document falls back to static `HomePageContent`.
+- `generateMetadata` builds **hreflang** alternates from sibling pages sharing `translationGroupId`.
+
+**URL examples** (default `en`):
+
+| Locale | Home | About page |
+|--------|------|------------|
+| English (default) | `/` | `/about-us` |
+| Urdu | `/ur` | `/ur/about-us` |
+
+**Live preview:** `payload.config.ts` `livePreview.url` includes `locale` query param: `/api/draft?slug=...&locale=...`.
 
 ---
 
@@ -146,7 +283,7 @@ Inline in `payload.config.ts`. Email + name fields; used to authenticate API cal
 
 ## Globals
 
-Payload Globals are singleton documents — one record per global, edited in the admin panel and fetched server-side on every frontend request.
+Payload Globals are singleton documents — one record per global. The **theme** global applies site-wide. **Header** and **footer** content for the public site is primarily managed through **`header-locales`** and **`footer-locales`** collections (one record per locale); legacy **`header`** / **`footer`** globals remain registered and may be used as fallbacks in layout code.
 
 ### Header Global
 **File:** `src/globals/Header.ts`
@@ -204,27 +341,17 @@ Both are registered in `payload.config.ts` under `globals: [Header, Footer]`.
 ### Root Layout
 **File:** `src/app/(frontend)/layout.tsx`
 
+Minimal wrapper: imports global CSS and `@/blocks/registry-setup` so block components are registered before any page renders. Does **not** render `<html>` / `<body>` — that happens in the locale layout.
+
+### Locale Layout
+**File:** `src/app/(frontend)/[locale]/layout.tsx`
+
 An `async` server component that:
-1. Calls `getGlobals()` — parallel `Promise.all` fetch of the `header` and `footer` globals via `payload.findGlobal({ slug, depth: 1 })`
-2. Falls back to empty objects `{}` if the globals fetch fails (DB unavailable during cold-start)
-3. Renders the full page shell: `<SiteHeader>` → `<main>{children}</main>` → `<SiteFooter>`
-
-```tsx
-export default async function FrontendLayout({ children }) {
-  const { header, footer } = await getGlobals()
-  return (
-    <html lang="en"><body className="antialiased">
-      <SiteHeader logo={header.logo} navigationItems={header.navigationItems}
-        ctaButton={header.ctaButton} stickyHeader={header.stickyHeader} />
-      <main>{children}</main>
-      <SiteFooter logo={footer.logo} columns={footer.columns}
-        copyright={footer.copyright} socialLinks={footer.socialLinks} />
-    </body></html>
-  )
-}
-```
-
-Also imports `@/blocks/registry-setup` here to ensure all block components are registered before any page renders.
+1. Validates `locale` via `validateLocale(localeCode)` — `notFound()` if disabled or unknown
+2. Fetches **`header-locales`** and **`footer-locales`** for the locale ID (with fallback to default locale's records)
+3. Fetches global **`theme`** and injects CSS variables / Google Fonts
+4. Wraps content in `LocaleProvider` (exposes locale record to client components; sets `dir` for RTL)
+5. Renders `<SiteHeader>` → `<main>{children}</main>` → `<SiteFooter>`
 
 ---
 
@@ -938,6 +1065,39 @@ Called automatically by the `livePreview.url` function in `payload.config.ts` wh
 
 Clears the Draft Mode cookie and redirects back to the page. Visiting `/api/exit-draft?slug=about-us` restores normal published-only rendering for the current browser session.
 
+### `GET /api/internal/locales`
+**File:** `src/app/api/internal/locales/route.ts`
+
+Returns enabled locale codes and the default code for Edge middleware (cannot use Postgres directly in middleware).
+
+```ts
+// Response
+{ codes: string[], defaultCode: string }
+```
+
+Cached `public, s-maxage=60`. Falls back to `{ codes: ['en'], defaultCode: 'en' }` on DB error.
+
+### `POST /api/admin/duplicate-page-locale`
+**File:** `src/app/api/admin/duplicate-page-locale/route.ts`
+
+Creates a draft translation of an existing page in another locale. Auth: Payload session via `payload.auth({ headers })`.
+
+```ts
+// Request
+{ pageId: string | number, targetLocaleId: string | number }
+
+// Success (200)
+{ success: true, pageId, slug }
+
+// Errors
+401 Unauthorized
+400 Missing body / no translationGroupId / same locale / ValidationError
+404 Source page or target locale not found
+409 Translation or homepage slug conflict — may include existingId
+```
+
+Delegates to `duplicatePageForLocale()` in `src/lib/admin/duplicatePageForLocale.ts`.
+
 ---
 
 ### Payload REST API
@@ -962,22 +1122,24 @@ GraphQL is enabled with `GRAPHQL_POST(config)` and the playground GET route. The
 
 ## Frontend Routing
 
-### `[[...slug]]` Catch-All Page
-**File:** `src/app/(frontend)/[[...slug]]/page.tsx`
+### `[locale]/[[...slug]]` Catch-All Page
+**File:** `src/app/(frontend)/[locale]/[[...slug]]/page.tsx`
 
-| Path | Resolved slug |
-|------|--------------|
-| `/` | `"/"` |
-| `/about-us` | `"about-us"` |
-| `/docs/intro` | `"docs/intro"` |
+Middleware rewrites unprefixed URLs to include the default locale segment internally; the browser may show `/` for default locale and `/ur/...` for others.
+
+| Browser path | Internal locale | Resolved slug |
+|--------------|-----------------|---------------|
+| `/` | `en` (default) | `"/"` |
+| `/about-us` | `en` | `"about-us"` |
+| `/ur` | `ur` | `"/"` |
+| `/ur/about-us` | `ur` | `"about-us"` |
 
 - Checks `draftMode().isEnabled` from `next/headers` on every request
-- Fetches page with `depth: 3`; omits the `status: 'published'` filter when draft mode is active so unpublished pages are visible in the admin preview
-- Generates metadata from `page.seo.metaTitle`, `page.seo.metaDescription`, and `page.seo.noIndex` (always uses published data, ignores draft mode)
-- Renders all three content areas in order: `<RenderHero hero={page.hero} />`, `<DynamicRenderer layout={page.dbLayout} />`, `<RenderContentBlocks blocks={page.contentBlocks} />`
-- Renders `<LivePreviewListener serverURL={...} />` only when `isDraftMode` is true — zero overhead on public page loads
-- Page component returns a `<>` fragment — the outer `<main>` is provided by `layout.tsx`
-- `generateStaticParams()` pre-renders up to 200 published pages and returns `[]` if the DB is unavailable during build/dev cold-start
+- `getPage(slug, localeCode, isDraft)` resolves the `locales` doc by `code`, then queries `pages` with `slug`, `locale`, and `status: 'published'` unless draft mode is on (`depth: 3`)
+- Generates metadata from `page.seo`; builds **hreflang** alternates from pages sharing `translationGroupId`
+- Renders `<RenderHero>`, `<DynamicRenderer>`, `<RenderContentBlocks>`; static `HomePageContent` fallback when no CMS page exists at `/`
+- Renders `<LivePreviewListener>` only when draft mode is enabled
+- Outer shell (`html`, header, footer) is provided by `[locale]/layout.tsx`
 
 ---
 
@@ -993,7 +1155,12 @@ buildConfig({
     importMap: { baseDir: path.resolve(dirname) },
     meta: { titleSuffix: '— Block System' },
     livePreview: {
-      url: ({ data }) => `${process.env.NEXT_PUBLIC_SERVER_URL}/api/draft?slug=${data?.slug}`,
+      url: ({ data }) => {
+        const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL ?? 'http://localhost:3000'
+        const slug = (data?.slug as string) ?? '/'
+        const localeCode = (data?.locale as { code?: string } | null)?.code ?? 'en'
+        return `${serverUrl}/api/draft?slug=${encodeURIComponent(slug)}&locale=${encodeURIComponent(localeCode)}`
+      },
       collections: ['pages'],
       breakpoints: [
         { label: 'Mobile',  name: 'mobile',  width: 375,  height: 667  },
@@ -1002,8 +1169,8 @@ buildConfig({
       ],
     },
   },
-  collections: [BlockDefinitions, BlockDefinitionVersions, Pages, Media, Users],
-  globals: [Header, Footer],
+  collections: [Locales, HeaderLocales, FooterLocales, BlockDefinitions, BlockDefinitionVersions, Pages, Media, SavedSections, Users],
+  globals: [Header, Footer, Theme],
   editor: lexicalEditor({}),
   db: postgresAdapter({
     pool: {
@@ -1030,6 +1197,26 @@ Next is wrapped with `withPayload(nextConfig)`. Image optimization currently all
 Payload 3.x supports replacing any field's admin UI with a custom React component via `admin.components.Field`. These components use `'use client'` and the `@payloadcms/ui` hooks to read/write field values.
 
 **Import map:** `src/app/(payload)/admin/importMap.js` — auto-generated by `pnpm payload generate:importmap`. Maps component string paths (e.g. `'@/components/BlockDataField#BlockDataField'`) to actual React component references.
+
+---
+
+### TranslationStatus
+**File:** `src/components/admin/TranslationStatus.tsx`
+
+Sidebar `ui` field on `pages`. When `translationGroupId` exists, fetches sibling pages in the same group and all **enabled** locales. Lists each locale with **Open** (if translated), **Create** (triggers `#translate-to-locale-btn`), or **current** marker. Shows a save-first hint when the group ID is not yet generated.
+
+---
+
+### DuplicateForLocale
+**File:** `src/components/admin/DuplicateForLocale.tsx`
+
+Sidebar **Translate to…** button (`id="translate-to-locale-btn"`). Modal loads enabled locales and existing translations in the group. Rows:
+
+- **Current page** — disabled, not selectable
+- **Already translated** — link to existing page
+- **Available** — radio selection for new translation
+
+POSTs to `/api/admin/duplicate-page-locale` with numeric `targetLocaleId` when possible. On 409, redirects to `existingId`.
 
 ---
 
@@ -1214,10 +1401,12 @@ Run with `pnpm seed`. Loads `.env` via `import 'dotenv/config'` (tsx does not au
    | `faq` | content |
    | `pricing` | content |
 
-2. **Creates the home page demo** — after all definitions succeed, checks if a page with `slug: '/'` already exists:
+2. **Resolves default locale** — finds `locales` where `isDefault: true`; exits with error if none exists.
+
+3. **Creates the home page demo** — after all definitions succeed, checks if a page with `slug: '/'` already exists:
    - **Exists with ≥ 4 blocks** → skips update (already seeded)
    - **Exists with < 4 blocks** → updates with the full 6-block demo (catches legacy 3-block seed)
-   - **Doesn't exist** → creates it (`status: published`)
+   - **Doesn't exist** → creates it (`status: 'published'`, `locale: defaultLocale.id`)
 
    The demo page uses preset data (`[preset][0].data`) for each block:
 
@@ -1247,9 +1436,13 @@ payload/
 └── src/
     ├── app/
     │   ├── (frontend)/
-    │   │   ├── [[...slug]]/page.tsx     # Catch-all page renderer
-    │   │   ├── layout.tsx               # Async frontend layout — fetches globals, renders shell
+    │   │   ├── [locale]/
+    │   │   │   ├── layout.tsx           # Locale shell — header/footer per locale, theme, RTL
+    │   │   │   ├── [[...slug]]/page.tsx # Catch-all page renderer
+    │   │   │   └── _home/HomePageContent.tsx
+    │   │   ├── layout.tsx               # Root — CSS + block registry only
     │   │   └── globals.css
+    │   ├── middleware.ts                # Locale prefix redirect / rewrite
     │   ├── (payload)/
     │   │   ├── admin/[[...segments]]/   # Payload admin UI
     │   │   ├── api/[...slug]/route.ts   # Payload API catch-all
@@ -1267,14 +1460,25 @@ payload/
     │       │   ├── generate/route.ts    # POST /api/block-builder/generate — ts-morph codegen
     │       │   └── load/[slug]/route.ts # GET  /api/block-builder/load/:slug
     │       ├── draft/route.ts           # GET  /api/draft   — enables Next.js Draft Mode
-    │       └── exit-draft/route.ts      # GET  /api/exit-draft — disables Draft Mode
+    │       ├── exit-draft/route.ts      # GET  /api/exit-draft — disables Draft Mode
+    │       ├── internal/locales/route.ts # GET enabled locale codes (middleware)
+    │       └── admin/duplicate-page-locale/route.ts # POST page translation
     │
     ├── collections/
+    │   ├── Locales.ts
+    │   ├── HeaderLocales.ts
+    │   ├── FooterLocales.ts
     │   ├── BlockDefinitions.ts
     │   ├── BlockDefinitionVersions.ts
     │   ├── Pages.ts
     │   ├── Media.ts
     │   └── index.ts
+    ├── lib/
+    │   ├── locale/                      # getLocales, validateLocale, LocaleProvider
+    │   ├── payload/coerceRelationshipId.ts
+    │   └── admin/duplicatePageForLocale.ts
+    ├── migrations/
+    │   └── 20250514000000_locale_system.ts
     │
     ├── globals/
     │   ├── Header.ts                    # Navigation, logo, CTA button, sticky toggle
@@ -1346,6 +1550,9 @@ payload/
     │   └── index.ts
     │
     ├── components/
+    │   ├── admin/
+    │   │   ├── TranslationStatus.tsx    # Sidebar translation coverage list
+    │   │   └── DuplicateForLocale.tsx   # Translate to… modal
     │   ├── LivePreviewListener.tsx      # 'use client' wrapper for RefreshRouteOnSave
     │   ├── EditInBuilderButton/
     │   │   └── index.tsx                # Payload admin ui field — link to /block-builder?load=<slug>
@@ -1481,6 +1688,9 @@ The block builder runs inside the same Next.js app at `/block-builder` — no se
 ### 12. Client/Server Component Boundary for Interactive Navigation
 `SiteHeader` is `'use client'` for dropdown/accordion state. `SiteFooter` and the layout wrapper are server components. The layout passes pre-fetched global data as props — the client component never fetches its own data. An invisible `fixed inset-0` backdrop div closes open dropdowns on outside click without a `useEffect` global event listener, keeping the interaction model simple and memory-leak-free.
 
+### 16. Locale-Linked Pages (Translation Groups)
+Each locale variant of a page is a separate `pages` document. `translationGroupId` (UUID) links variants without Payload's built-in localization plugin. Slugs are unique per `(slug, locale_id)` — the homepage uses `/` in every locale. Duplication copies structure (`dbLayout`, `contentBlocks`, `seo`) into a new draft; editors translate text in place. Relationship IDs must be coerced for PostgreSQL on create (see `coerceRelationshipId`).
+
 ---
 
 ## Data Flow
@@ -1496,12 +1706,26 @@ POST /api/blocks/save
   → afterChange: update BlockDefinition.currentVersion → v1
 ```
 
+### Creating a Page Translation
+
+```
+Editor: Translate to… → Urdu
+  → DuplicateForLocale POST /api/admin/duplicate-page-locale
+  → duplicatePageForLocale()
+      → coerceRelationshipId(pageId, targetLocaleId)
+      → validate: group id, not same locale, target enabled, no duplicate in group
+      → resolve slug (keep / for home; suffix -ur for other conflicts)
+      → payload.create({ locale: targetLocale.id, status: 'draft', ... })
+  → redirect to /admin/collections/pages/<newId>
+```
+
 ### Rendering a Page
 
 ```
-GET /about-us
-  → layout.tsx: getGlobals() → header + footer via payload.findGlobal()
-  → getPage("about-us") with depth: 3
+GET /ur/about-us  (or /about-us for default locale)
+  → middleware: locale segment resolved
+  → [locale]/layout.tsx: validateLocale, header-locales + footer-locales + theme
+  → getPage("about-us", "ur") with depth: 3
   → generateMetadata() from page.seo
   → <SiteHeader logo=... navigationItems=... ctaButton=... stickyHeader=... />
   → <RenderHero hero={page.hero} />
@@ -1563,8 +1787,8 @@ New pages use new version; existing pages keep their pinned version untouched
 
 ```
 Editor clicks "Live Preview" in admin
-  → livePreview.url builds: /api/draft?slug=about-us
-  → iframe loads /api/draft?slug=about-us
+  → livePreview.url builds: /api/draft?slug=about-us&locale=en
+  → iframe loads /api/draft?slug=about-us&locale=en
       → payload.auth() — 401 if not logged in
       → draftMode().enable() — sets __prerender_bypass cookie
       → redirect(/about-us)
