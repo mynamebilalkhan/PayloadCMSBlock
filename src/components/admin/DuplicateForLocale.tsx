@@ -5,6 +5,7 @@ import { useDocumentInfo, useFormFields } from '@payloadcms/ui'
 import { useRouter } from 'next/navigation'
 
 import { ClientOnlyAdminField } from '@/components/admin/ClientOnlyAdminField'
+import { AdminButton, adminUIStyles } from '@/components/admin/AdminUI'
 import { relationshipIdsEqual } from '@/lib/payload/coerceRelationshipId'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -168,24 +169,13 @@ function DuplicateForLocaleContent() {
 
   return (
     <>
-      <button
+      <AdminButton
         id="translate-to-locale-btn"
         type="button"
         onClick={openModal}
-        style={{
-          padding: '6px 12px',
-          borderRadius: 6,
-          border: '1px solid var(--theme-border-color)',
-          background: 'var(--theme-elevation-100)',
-          color: 'var(--theme-text)',
-          fontSize: '13px',
-          cursor: 'pointer',
-          fontWeight: 500,
-          marginTop: 10,
-        }}
       >
         Translate to…
-      </button>
+      </AdminButton>
 
       {open && (
         <ModalOverlay onClose={() => setOpen(false)}>
@@ -260,7 +250,7 @@ function LocalePickerList({
   onSelect: (id: string) => void
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+    <div className={adminUIStyles.stack}>
       {rows.map((row) => {
         const { locale } = row
         const idStr = String(locale.id)
@@ -269,17 +259,7 @@ function LocalePickerList({
           return (
             <div
               key={idStr}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: '1px solid var(--theme-border-color)',
-                fontSize: '13px',
-                background: 'var(--theme-elevation-100)',
-                color: 'var(--theme-elevation-400)',
-              }}
+              className={adminUIStyles.optionRow}
             >
               {locale.flag && <span style={{ fontSize: '18px' }}>{locale.flag}</span>}
               <span style={{ flex: 1 }}>{locale.name} ({locale.code})</span>
@@ -292,17 +272,7 @@ function LocalePickerList({
           return (
             <div
               key={idStr}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: '1px solid var(--theme-border-color)',
-                fontSize: '13px',
-                background: 'var(--theme-elevation-100)',
-                color: 'var(--theme-elevation-400)',
-              }}
+              className={adminUIStyles.optionRow}
             >
               {locale.flag && <span style={{ fontSize: '18px' }}>{locale.flag}</span>}
               <span style={{ flex: 1 }}>{locale.name} ({locale.code})</span>
@@ -324,21 +294,11 @@ function LocalePickerList({
         return (
           <label
             key={idStr}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '8px 12px',
-              borderRadius: 8,
-              border: `2px solid ${selectedLocaleId === idStr ? 'var(--theme-success-500)' : 'var(--theme-border-color)'}`,
-              cursor: 'pointer',
-              fontSize: '13px',
-              background:
-                selectedLocaleId === idStr
-                  ? 'var(--theme-elevation-150)'
-                  : 'var(--theme-elevation-100)',
-              color: 'var(--theme-text)',
-            }}
+            className={[
+              adminUIStyles.optionRow,
+              adminUIStyles.optionButton,
+              selectedLocaleId === idStr ? adminUIStyles.optionSelected : '',
+            ].filter(Boolean).join(' ')}
           >
             <input
               type="radio"
@@ -396,38 +356,20 @@ function ModalActions({
 }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-      <button
+      <AdminButton
         type="button"
         onClick={onCancel}
-        style={{
-          padding: '8px 16px',
-          borderRadius: 6,
-          border: '1px solid var(--theme-border-color)',
-          background: 'var(--theme-elevation-100)',
-          color: 'var(--theme-text)',
-          fontSize: '13px',
-          cursor: 'pointer',
-        }}
       >
         Cancel
-      </button>
-      <button
+      </AdminButton>
+      <AdminButton
         type="button"
         onClick={onCreate}
         disabled={!canCreate}
-        style={{
-          padding: '8px 16px',
-          borderRadius: 6,
-          border: 'none',
-          background: canCreate ? 'var(--theme-success-500)' : 'var(--theme-elevation-300)',
-          color: canCreate ? '#fff' : 'var(--theme-elevation-500)',
-          fontSize: '13px',
-          cursor: canCreate ? 'pointer' : 'not-allowed',
-          fontWeight: 500,
-        }}
+        tone="primary"
       >
         {loading ? 'Creating…' : 'Create translation'}
-      </button>
+      </AdminButton>
     </div>
   )
 }

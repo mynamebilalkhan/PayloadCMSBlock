@@ -1,9 +1,9 @@
 import { notFound } from 'next/navigation'
 import { draftMode } from 'next/headers'
 import { getPayload } from 'payload'
-import type { Where } from 'payload'
 import config from '@payload-config'
 import { getDefaultLocale } from '@/lib/locale'
+import { getPage } from '@/lib/pages/getPage'
 import { DynamicRenderer } from '@/renderer'
 import type { PopulatedBlockInstance } from '@/renderer'
 import { RenderContentBlocks } from '@/blocks/RenderContentBlocks'
@@ -16,43 +16,16 @@ import type { Metadata } from 'next'
 
 type Params = Promise<{ locale: string; slug?: string[] }>
 
-// ─── Data fetching ────────────────────────────────────────────────────────────
-
-async function getPage(slug: string, localeCode: string, isDraft = false) {
-  const payload = await getPayload({ config })
-
-  // Resolve the locale document for this code
-  const localeResult = await payload.find({
-    collection: 'locales',
-    where: { code: { equals: localeCode }, isEnabled: { equals: true } },
-    limit: 1,
-  })
-
-  const localeDoc = localeResult.docs[0]
-  if (!localeDoc) return null
-
-  const where: Where = {
-    slug: { equals: slug },
-    locale: { equals: localeDoc.id },
-    ...(isDraft ? {} : { status: { equals: 'published' } }),
-  }
-
-  const result = await payload.find({
-    collection: 'pages',
-    where,
-    limit: 1,
-    depth: 3, // populate blockDefinition + blockVersion relationships
-  })
-
-  return result.docs[0] ?? null
-}
+// CMS pages use draft/live preview — skip static path generation in dev to avoid 4–6s compile stalls.
+export const dynamic = process.env.NODE_ENV === 'development' ? 'force-dynamic' : 'auto'
 
 // ─── Metadata ─────────────────────────────────────────────────────────────────
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { locale: localeCode, slug: slugParts } = await params
   const slug = slugParts?.join('/') ?? '/'
-  const page = await getPage(slug, localeCode)
+  const { isEnabled: isDraftMode } = await draftMode()
+  const page = await getPage(slug, localeCode, isDraftMode)
 
   if (!page) return { title: 'Not Found' }
 
@@ -61,11 +34,10 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
     | { metaTitle?: string; metaDescription?: string; ogImage?: { url?: string } | null; noIndex?: boolean }
     | undefined
 
-  // Build hreflang alternates from other translation variants
   const translationGroupId = page.translationGroupId as string | null
   let alternates: Metadata['alternates'] = undefined
 
-  if (translationGroupId) {
+  if (translationGroupId && process.env.NODE_ENV !== 'development') {
     try {
       const payload = await getPayload({ config })
       const variants = await payload.find({
@@ -118,6 +90,10 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 // ─── Static params (SSG) ──────────────────────────────────────────────────────
 
 export async function generateStaticParams() {
+  if (process.env.NODE_ENV === 'development') {
+    return []
+  }
+
   try {
     const payload = await getPayload({ config })
 
@@ -130,7 +106,7 @@ export async function generateStaticParams() {
       payload.find({
         collection: 'pages',
         where: { status: { equals: 'published' } },
-        depth: 1, // populate locale for code lookup
+        depth: 1,
         limit: 500,
       }),
     ])
@@ -164,10 +140,12 @@ export default async function LocaleFrontendPage({ params }: { params: Params })
   const slug = slugParts?.join('/') ?? '/'
 
   const { isEnabled: isDraftMode } = await draftMode()
-  const page = await getPage(slug, localeCode, isDraftMode)
 
-  // Fall back to static homepage when no CMS page exists for the root path
-  if (!page && slug === '/') return <HomePageContent />
+  if (slug === '/') {
+    return <HomePageContent localeCode={localeCode} isDraftMode={isDraftMode} />
+  }
+
+  const page = await getPage(slug, localeCode, isDraftMode)
   if (!page) notFound()
 
   const dbLayout = (page.dbLayout ?? []) as unknown as PopulatedBlockInstance[]

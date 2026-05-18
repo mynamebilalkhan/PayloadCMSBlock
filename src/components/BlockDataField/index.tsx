@@ -1,9 +1,14 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useField, useFormFields } from '@payloadcms/ui'
 import type { BlockSchema } from '@/validation/types'
 import { SchemaForm } from './SchemaForm'
+import {
+  coerceRelationshipId,
+  normalizeBlockData,
+  stripUnknownKeys,
+} from './blockDataUtils'
 
 type Props = {
   path: string
@@ -13,31 +18,60 @@ type Props = {
 export function BlockDataField({ path, readOnly }: Props) {
   const { value, setValue } = useField<Record<string, unknown>>({ path })
 
-  // Keep a ref so the fetch callback always sees the latest value without stale closures
-  const valueRef = useRef(value)
-  useEffect(() => { valueRef.current = value }, [value])
-
-  // Derive sibling blockVersion path: "layout.0.data" → "layout.0.blockVersion"
   const versionPath = path.replace(/\.data$/, '.blockVersion')
 
-  const blockVersionId = useFormFields(([fields]) => {
-    const v = fields[versionPath]?.value
-    if (!v) return null
-    return typeof v === 'object' && v !== null && 'id' in v
-      ? (v as { id: string }).id
-      : (v as string)
-  })
+  const formFieldSlice = useFormFields(([fields]) => ({
+    dataField: fields[path],
+    versionField: fields[versionPath],
+  }))
+
+  const blockVersionId = useFormFields(([fields]) =>
+    coerceRelationshipId(fields[versionPath]?.value),
+  )
 
   const [schema, setSchema] = useState<BlockSchema | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const formData = useMemo(() => normalizeBlockData(value), [value])
+  const formDataFromSlice = useMemo(
+    () => normalizeBlockData(formFieldSlice?.dataField?.value),
+    [formFieldSlice],
+  )
+  const formDataRef = useRef(formData)
+  useEffect(() => {
+    formDataRef.current = formData
+  }, [formData])
+
+  const lastCleanedVersionRef = useRef<string | null>(null)
+
+  /** Only write back when stripping orphan keys — never when data has not hydrated yet. */
+  const applySchemaCleanup = useCallback(
+    (current: Record<string, unknown>, nextSchema: BlockSchema, versionKey: string) => {
+      if (Object.keys(current).length === 0) return
+
+      const { cleaned, removedKeys } = stripUnknownKeys(current, nextSchema)
+      if (removedKeys.length === 0) {
+        lastCleanedVersionRef.current = versionKey
+        return
+      }
+
+      lastCleanedVersionRef.current = versionKey
+      setValue(cleaned)
+    },
+    [setValue],
+  )
+
   useEffect(() => {
     if (!blockVersionId) {
       setSchema(null)
+      lastCleanedVersionRef.current = null
       return
     }
 
+    lastCleanedVersionRef.current = null
+
+    let cancelled = false
     setLoading(true)
     setError(null)
 
@@ -47,23 +81,50 @@ export function BlockDataField({ path, readOnly }: Props) {
         return res.json()
       })
       .then((doc) => {
-        if (!doc?.schema) { setError('Version has no schema.'); return }
+        if (cancelled) return
+        if (!doc?.schema) {
+          setError('Version has no schema.')
+          return
+        }
 
         const newSchema = doc.schema as BlockSchema
         setSchema(newSchema)
 
-        // Strip keys not defined in this schema so orphaned data never persists
-        const allowed = new Set(newSchema.fields.map((f) => f.name))
-        const current = valueRef.current ?? {}
-        const cleaned: Record<string, unknown> = {}
-        for (const key of Object.keys(current)) {
-          if (allowed.has(key)) cleaned[key] = current[key]
-        }
-        setValue(cleaned)
+        applySchemaCleanup(formDataRef.current, newSchema, String(blockVersionId))
       })
-      .catch((err) => setError(String(err)))
-      .finally(() => setLoading(false))
-  }, [blockVersionId])
+      .catch((err) => {
+        if (!cancelled) setError(String(err))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [blockVersionId, applySchemaCleanup])
+
+  // If block data hydrates after the schema fetch, run orphan-key cleanup once.
+  useEffect(() => {
+    if (!schema || !blockVersionId) return
+    const versionKey = String(blockVersionId)
+    if (lastCleanedVersionRef.current === versionKey) return
+    if (Object.keys(formData).length === 0) return
+
+    applySchemaCleanup(formData, schema, versionKey)
+  }, [formData, schema, blockVersionId, applySchemaCleanup])
+
+  const handleChange = useCallback(
+    (next: Record<string, unknown>) => {
+      if (schema) {
+        const { cleaned } = stripUnknownKeys(next, schema)
+        setValue(cleaned)
+      } else {
+        setValue(next)
+      }
+    },
+    [schema, setValue],
+  )
 
   return (
     <div style={{ marginTop: '1rem' }}>
@@ -109,8 +170,8 @@ export function BlockDataField({ path, readOnly }: Props) {
         >
           <SchemaForm
             schema={schema}
-            value={value ?? {}}
-            onChange={(next) => setValue(next)}
+            value={formData}
+            onChange={handleChange}
             readOnly={readOnly}
           />
         </div>

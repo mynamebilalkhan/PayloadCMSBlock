@@ -51,6 +51,9 @@ Desktop.ini
 *.swo
 *~
 
+# Cursor — local AI rules (not committed)
+.cursorrules
+
 # Testing
 coverage/
 .nyc_output/

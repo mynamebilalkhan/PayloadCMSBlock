@@ -1,20 +1,36 @@
 @import "tailwindcss";
+@import "../../styles/nextbridge.css";
+
+/* ── Reference design tokens (styles.css :root) ── */
+:root {
+  --color-bg: #fafaf8;
+  --color-text: #1a1a18;
+  --color-text-secondary: #6b6b63;
+  --color-divider: #e0ded8;
+  --color-highlight: #c8a96e;
+  --color-dark: #1a1a18;
+  --color-dark-text: #fafaf8;
+  --color-dark-muted: #a8a89e;
+  --color-photo-bg: #e8e6e0;
+  --font: var(--font-dm-sans), 'DM Sans', -apple-system, sans-serif;
+  --font-heading: var(--font-michroma), 'Michroma', var(--font-dm-sans), 'DM Sans', sans-serif;
+}
 
 @theme {
-  /* ── Brand Colors ── */
-  --color-nb-bg: #FAFAF8;
-  --color-nb-text: #1A1A18;
-  --color-nb-text-secondary: #6B6B63;
-  --color-nb-divider: #E0DED8;
-  --color-nb-highlight: #C8A96E;
-  --color-nb-dark: #1A1A18;
-  --color-nb-dark-text: #FAFAF8;
-  --color-nb-dark-muted: #A8A89E;
-  --color-nb-photo-bg: #E8E6E0;
+  /* ── Brand Colors (Tailwind nb-* utilities) ── */
+  --color-nb-bg: #fafaf8;
+  --color-nb-text: #1a1a18;
+  --color-nb-text-secondary: #6b6b63;
+  --color-nb-divider: #e0ded8;
+  --color-nb-highlight: #c8a96e;
+  --color-nb-dark: #1a1a18;
+  --color-nb-dark-text: #fafaf8;
+  --color-nb-dark-muted: #a8a89e;
+  --color-nb-photo-bg: #e8e6e0;
 
   /* ── Font Families ── */
-  --font-family-sans: 'DM Sans', -apple-system, system-ui, sans-serif;
-  --font-family-heading: 'Michroma', 'DM Sans', sans-serif;
+  --font-family-sans: var(--font-dm-sans), 'DM Sans', -apple-system, system-ui, sans-serif;
+  --font-family-heading: var(--font-michroma), 'Michroma', var(--font-dm-sans), 'DM Sans', sans-serif;
 
   /* ── Custom Animations ── */
   --animate-fade-up: fadeUp 1s ease forwards;
@@ -22,20 +38,38 @@
   --animate-blink: blink 2s ease infinite;
 }
 
+@utility font-heading {
+  font-family: var(--font-family-heading);
+}
+
 /* ── Keyframes ── */
 @keyframes fadeUp {
-  to { opacity: 1; transform: translateY(0); }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes pulseLine {
-  0%   { top: -100%; }
-  50%  { top: 100%; }
-  100% { top: 100%; }
+  0% {
+    top: -100%;
+  }
+  50% {
+    top: 100%;
+  }
+  100% {
+    top: 100%;
+  }
 }
 
 @keyframes blink {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
 
 /* ── Reveal animation (IntersectionObserver driven) ── */
@@ -44,6 +78,7 @@
   transform: translateY(18px);
   transition: opacity 0.7s ease, transform 0.7s ease;
 }
+
 .reveal.visible {
   opacity: 1;
   transform: translateY(0);

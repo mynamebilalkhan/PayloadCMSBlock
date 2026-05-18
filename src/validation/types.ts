@@ -147,6 +147,7 @@ export interface TextareaField extends BaseField {
   defaultValue?: string
 }
 
+/** Stored as Lexical SerializedEditorState JSON; legacy HTML strings are still accepted. */
 export interface RichTextField extends BaseField {
   type: 'richtext'
 }

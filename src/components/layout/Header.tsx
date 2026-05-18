@@ -3,73 +3,56 @@
 import React, { useState, useEffect } from 'react'
 import { useLocale } from '@/lib/locale/context'
 
-// ─── Nav data ─────────────────────────────────────────────────────────────────
-
-const NAV_ITEMS = [
-  {
-    label: '1996',
-    href: '/our-story',
-    children: [
-      { label: 'our story', href: '/our-story' },
-      { label: 'leadership', href: '/leadership' },
-      { label: "where we're going", href: '/where-were-going' },
-    ],
-  },
-  {
-    label: 'our engineers',
-    href: '/our-engineers',
-    children: [
-      { label: 'who they are', href: '/our-engineers' },
-      { label: 'why they stay', href: '/why-they-stay' },
-      { label: 'how we find them', href: '/how-we-find-them' },
-      { label: 'pakistan advantage', href: '/pakistan-advantage' },
-    ],
-  },
-  {
-    label: 'experience',
-    href: '/client-stories',
-    children: [
-      { label: 'client stories', href: '/client-stories' },
-      { label: 'by challenge type', href: '/by-challenge-type' },
-      { label: 'the numbers', href: '/the-numbers' },
-    ],
-  },
-  {
-    label: 'engineering',
-    href: '/software',
-    children: [
-      { label: 'software', href: '/software' },
-      { label: 'firmware & embedded', href: '/firmware-embedded' },
-      { label: 'hardware design', href: '/hardware-design' },
-      { label: 'cloud & infrastructure', href: '/cloud-infrastructure' },
-      { label: 'AI & Machine Learning', href: '/ai-machine-learning' },
-    ],
-  },
-  {
-    label: 'straight talk',
-    href: '/straight-talk',
-    children: [],
-  },
-]
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export interface NavigationChild {
+  label: string
+  url: string
+  openInNewTab?: boolean
+}
+
+export interface NavigationItem {
+  label: string
+  url?: string | null
+  openInNewTab?: boolean
+  children?: NavigationChild[]
+}
+
+export interface CTAButton {
+  text?: string
+  url?: string
+}
+
+export interface LogoData {
+  url?: string | null
+  alt?: string | null
+}
+
 export interface SiteHeaderProps {
-  logo?: { url?: string | null; alt?: string | null } | null
-  navigationItems?: unknown
-  ctaButton?: unknown
+  logo?: LogoData | null
+  navigationItems?: NavigationItem[] | null
+  ctaButton?: CTAButton | null
   stickyHeader?: boolean | null
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function SiteHeader(_props: SiteHeaderProps) {
+export function SiteHeader({
+  logo,
+  navigationItems = [],
+  ctaButton,
+  stickyHeader = true,
+}: SiteHeaderProps) {
   const locale = useLocale()
   const makeHref = (path: string) => locale.isDefault ? path : `/${locale.code}${path}`
 
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [openSection, setOpenSection] = useState<number | null>(null)
+
+  // Default CTA if not provided
+  const defaultCTA: CTAButton = { text: 'Start A Conversation', url: '/start-a-conversation' }
+  const effectiveCTA = ctaButton?.text ? ctaButton : defaultCTA
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 50)
@@ -96,7 +79,8 @@ export function SiteHeader(_props: SiteHeaderProps) {
     <>
       <nav
         className={[
-          'fixed inset-x-0 top-0 z-[100] flex items-center justify-between',
+          'inset-x-0 top-0 z-[100] flex items-center justify-between',
+          stickyHeader ? 'fixed' : 'absolute',
           'px-16 py-6 max-[900px]:px-8 max-[900px]:py-5',
           'bg-[rgba(250,250,248,0.92)] backdrop-blur-[20px]',
           'border-b transition-colors duration-300',
@@ -104,25 +88,31 @@ export function SiteHeader(_props: SiteHeaderProps) {
         ].join(' ')}
       >
         {/* Logo */}
-        <a href="/" className="flex items-center no-underline">
-          <img
-            src="https://nextbridge.com/wp-content/uploads/2025/01/NXB-Logo.svg"
-            alt="Nextbridge"
-            className="h-7 w-auto"
-          />
+        <a href={locale.isDefault ? '/' : `/${locale.code}`} className="flex items-center no-underline">
+          {logo?.url ? (
+            <img
+              src={logo.url}
+              alt={logo.alt || 'Logo'}
+              className="h-7 w-auto"
+            />
+          ) : (
+            <span className="font-heading text-lg font-medium text-nb-text">Site</span>
+          )}
         </a>
 
         {/* Desktop nav links */}
         <ul className="[@media(min-width:901px)]:flex hidden items-center gap-10 list-none m-0 p-0">
-          {NAV_ITEMS.map((item, i) => (
+          {navigationItems?.map((item, i) => (
             <li key={i} className="relative group">
               <a
-                href={makeHref(item.href)}
+                href={item.url ? makeHref(item.url) : '#'}
+                target={item.openInNewTab ? '_blank' : undefined}
+                rel={item.openInNewTab ? 'noopener noreferrer' : undefined}
                 className="text-[0.85rem] font-normal text-nb-text-secondary no-underline tracking-[0.02em] transition-colors duration-200 hover:text-nb-text"
               >
                 {item.label}
               </a>
-              {item.children.length > 0 && (
+              {item.children && item.children.length > 0 && (
                 <ul
                   className={[
                     'absolute top-full left-[-1rem] hidden group-hover:block',
@@ -134,7 +124,9 @@ export function SiteHeader(_props: SiteHeaderProps) {
                   {item.children.map((child, j) => (
                     <li key={j}>
                       <a
-                        href={makeHref(child.href)}
+                        href={makeHref(child.url)}
+                        target={child.openInNewTab ? '_blank' : undefined}
+                        rel={child.openInNewTab ? 'noopener noreferrer' : undefined}
                         className="block px-5 py-2 text-[0.8rem] text-nb-text-secondary no-underline whitespace-nowrap transition-colors duration-200 hover:text-nb-text hover:bg-black/[0.03]"
                       >
                         {child.label}
@@ -145,14 +137,16 @@ export function SiteHeader(_props: SiteHeaderProps) {
               )}
             </li>
           ))}
-          <li>
-            <a
-              href={makeHref('/start-a-conversation')}
-              className="text-[0.85rem] font-medium text-nb-text no-underline tracking-[0.02em] px-5 py-2 border border-nb-text transition-colors duration-200 hover:bg-nb-text hover:text-nb-bg"
-            >
-              start a conversation
-            </a>
-          </li>
+          {effectiveCTA.text && (
+            <li>
+              <a
+                href={makeHref(effectiveCTA.url || '/start-a-conversation')}
+                className="text-[0.85rem] font-medium text-nb-text no-underline tracking-[0.02em] px-5 py-2 border border-nb-text transition-colors duration-200 hover:bg-nb-text hover:text-nb-bg"
+              >
+                {effectiveCTA.text}
+              </a>
+            </li>
+          )}
         </ul>
 
         {/* Hamburger (mobile) */}
@@ -192,9 +186,9 @@ export function SiteHeader(_props: SiteHeaderProps) {
         ].join(' ')}
       >
         <div className="max-w-[400px]">
-          {NAV_ITEMS.map((item, i) => (
+          {navigationItems?.map((item, i) => (
             <div key={i} className="border-b border-nb-divider">
-              {item.children.length > 0 ? (
+              {item.children && item.children.length > 0 ? (
                 <>
                   <button
                     type="button"
@@ -213,13 +207,15 @@ export function SiteHeader(_props: SiteHeaderProps) {
                     {item.children.map((child, j) => (
                       <a
                         key={j}
-                        href={makeHref(child.href)}
+                        href={makeHref(child.url)}
+                        target={child.openInNewTab ? '_blank' : undefined}
+                        rel={child.openInNewTab ? 'noopener noreferrer' : undefined}
                         onClick={closeMobile}
                         className={[
                           'block py-[0.65rem] pl-3 ml-1 text-[0.82rem] text-nb-text-secondary no-underline',
                           'border-l border-nb-divider transition-colors duration-200',
                           'hover:text-nb-text hover:border-l-nb-highlight',
-                          j === item.children.length - 1 ? 'mb-4' : '',
+                          j === (item.children?.length ?? 0) - 1 ? 'mb-4' : '',
                         ].join(' ')}
                       >
                         {child.label}
@@ -229,7 +225,9 @@ export function SiteHeader(_props: SiteHeaderProps) {
                 </>
               ) : (
                 <a
-                  href={makeHref(item.href)}
+                  href={item.url ? makeHref(item.url) : '#'}
+                  target={item.openInNewTab ? '_blank' : undefined}
+                  rel={item.openInNewTab ? 'noopener noreferrer' : undefined}
                   onClick={closeMobile}
                   className="block py-5 font-heading text-[0.85rem] font-normal tracking-[0.02em] text-nb-text no-underline"
                 >
@@ -239,15 +237,17 @@ export function SiteHeader(_props: SiteHeaderProps) {
             </div>
           ))}
 
-          <div className="pt-6">
-            <a
-              href={makeHref('/start-a-conversation')}
-              onClick={closeMobile}
-              className="inline-block font-heading text-[0.75rem] font-normal tracking-[0.02em] text-nb-text no-underline px-6 py-3 border border-nb-text transition-colors duration-200 hover:bg-nb-text hover:text-nb-bg"
-            >
-              start a conversation
-            </a>
-          </div>
+          {effectiveCTA.text && (
+            <div className="pt-6">
+              <a
+                href={makeHref(effectiveCTA.url || '/start-a-conversation')}
+                onClick={closeMobile}
+                className="inline-block font-heading text-[0.75rem] font-normal tracking-[0.02em] text-nb-text no-underline px-6 py-3 border border-nb-text transition-colors duration-200 hover:bg-nb-text hover:text-nb-bg"
+              >
+                {effectiveCTA.text}
+              </a>
+            </div>
+          )}
         </div>
       </div>
     </>

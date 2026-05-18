@@ -1,6 +1,7 @@
 import React from 'react'
 import type { FieldRendererProps } from './types'
 import type { BlockSchema, BlockData } from '@/validation/types'
+import { RichTextContent } from '@/components/RichTextContent'
 
 // ─── Individual field renderers ───────────────────────────────────────────────
 
@@ -85,22 +86,7 @@ function ImageValue({ value }: { value: Record<string, unknown> }) {
 }
 
 function RichTextValue({ value }: { value: unknown }) {
-  // Lexical serialised JSON — basic HTML passthrough for now.
-  // Replace with @payloadcms/richtext-lexical JSX serialiser in production.
-  if (typeof value === 'string') {
-    return (
-      <div
-        className="field-richtext prose"
-        dangerouslySetInnerHTML={{ __html: value }}
-      />
-    )
-  }
-  // Serialised Lexical root node
-  return (
-    <div className="field-richtext prose">
-      <pre className="text-xs">{JSON.stringify(value, null, 2)}</pre>
-    </div>
-  )
+  return <RichTextContent value={value} className="field-richtext prose" />
 }
 
 function ArrayValue({

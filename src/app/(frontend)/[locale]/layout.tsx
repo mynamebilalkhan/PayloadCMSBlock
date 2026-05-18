@@ -1,4 +1,5 @@
 import React from 'react'
+import { unstable_cache } from 'next/cache'
 import { notFound } from 'next/navigation'
 import { getPayload } from 'payload'
 import config from '@payload-config'
@@ -9,6 +10,7 @@ import { resolveTheme, tokensToCSS, buildGoogleFontsURL } from '@/theme/resolver
 import { defaultTheme } from '@/theme/tokens'
 import { LocaleProvider } from '@/lib/locale/context'
 import { validateLocale } from '@/lib/locale'
+import { dmSans, michroma } from '@/lib/fonts'
 import type { SiteHeaderProps } from '@/components/layout/Header'
 import type { SiteFooterProps } from '@/components/layout/Footer'
 import type { ThemeTokens } from '@/theme/tokens'
@@ -86,6 +88,14 @@ async function getLocaleGlobals(localeCode: string, localeId: string | number): 
   }
 }
 
+function getCachedLocaleGlobals(localeCode: string, localeId: string | number) {
+  return unstable_cache(
+    () => getLocaleGlobals(localeCode, localeId),
+    ['locale-globals', localeCode, String(localeId)],
+    { tags: ['locale-globals'], revalidate: 300 },
+  )()
+}
+
 // ─── Locale layout ────────────────────────────────────────────────────────────
 
 export default async function LocaleLayout({
@@ -103,27 +113,24 @@ export default async function LocaleLayout({
     notFound()
   }
 
-  const { header, footer, theme } = await getLocaleGlobals(localeCode, localeData.id)
+  const { header, footer, theme } = await getCachedLocaleGlobals(localeCode, localeData.id)
   const themeCSS = tokensToCSS(theme)
   const googleFontsURL = buildGoogleFontsURL(theme)
 
-  // Always load Nextbridge brand fonts
-  const nbFontsURL =
-    'https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Michroma&display=swap'
-
   return (
     <LocaleProvider locale={localeData}>
-      <html lang={localeCode} dir={localeData.isRTL ? 'rtl' : 'ltr'}>
+      <html
+        lang={localeCode}
+        dir={localeData.isRTL ? 'rtl' : 'ltr'}
+        className={`${dmSans.variable} ${michroma.variable}`}
+      >
         <head>
-          <link rel="preconnect" href="https://fonts.googleapis.com" />
-          <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-          <link rel="stylesheet" href={nbFontsURL} />
-          {googleFontsURL && googleFontsURL !== nbFontsURL && (
+          {googleFontsURL && (
             <link rel="stylesheet" href={googleFontsURL} />
           )}
           <style dangerouslySetInnerHTML={{ __html: themeCSS }} />
         </head>
-        <body className="antialiased">
+        <body className={`${dmSans.className} antialiased`}>
           <ThemeProvider theme={theme}>
             <SiteHeader
               logo={(header as Record<string, unknown>).logo as SiteHeaderProps['logo']}

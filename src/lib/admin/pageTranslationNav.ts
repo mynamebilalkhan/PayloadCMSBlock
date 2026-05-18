@@ -19,8 +19,19 @@ export async function fetchTranslationSiblings(
     `/api/pages?where[translationGroupId][equals]=${encodeURIComponent(translationGroupId)}&depth=0&limit=50`,
     { credentials: 'same-origin' },
   )
-  const data = (await res.json()) as { docs?: SiblingPage[] }
-  return data.docs ?? []
+  if (!res.ok) {
+    return []
+  }
+  const text = await res.text()
+  if (!text.trim()) {
+    return []
+  }
+  try {
+    const data = JSON.parse(text) as { docs?: SiblingPage[] }
+    return data.docs ?? []
+  } catch {
+    return []
+  }
 }
 
 export async function fetchEnabledLocales(): Promise<LocaleOption[]> {
@@ -28,8 +39,19 @@ export async function fetchEnabledLocales(): Promise<LocaleOption[]> {
     '/api/locales?where[isEnabled][equals]=true&limit=100&sort=sortOrder',
     { credentials: 'same-origin' },
   )
-  const data = (await res.json()) as { docs?: LocaleOption[] }
-  return data.docs ?? []
+  if (!res.ok) {
+    return []
+  }
+  const text = await res.text()
+  if (!text.trim()) {
+    return []
+  }
+  try {
+    const data = JSON.parse(text) as { docs?: LocaleOption[] }
+    return data.docs ?? []
+  } catch {
+    return []
+  }
 }
 
 export function siblingsByLocaleId(pages: SiblingPage[]): Map<string, SiblingPage> {

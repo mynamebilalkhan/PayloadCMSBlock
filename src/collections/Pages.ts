@@ -2,6 +2,7 @@ import type { CollectionConfig } from 'payload'
 import { randomUUID } from 'crypto'
 
 import { coerceRelationshipId } from '@/lib/payload/coerceRelationshipId'
+import { normalizeBlockData } from '@/lib/blockData/normalizeBlockData'
 import { Testimonials } from '@/blocks/Generic/Testimonials/config'
 import { hero } from '../heros/config'
 
@@ -51,6 +52,9 @@ export const Pages: CollectionConfig = {
       if (req.user) return true
       return { status: { equals: 'published' } }
     },
+    create: ({ req }) => Boolean(req.user),
+    update: ({ req }) => Boolean(req.user),
+    delete: ({ req }) => Boolean(req.user),
   },
   hooks: {
     beforeChange: [
@@ -68,6 +72,14 @@ export const Pages: CollectionConfig = {
         // Auto-generate translationGroupId on create (not on update)
         if (!data.translationGroupId) {
           data.translationGroupId = randomUUID()
+        }
+        if (Array.isArray(data.dbLayout)) {
+          for (const row of data.dbLayout) {
+            if (row && typeof row === 'object' && 'data' in row) {
+              const layoutRow = row as { data?: unknown }
+              layoutRow.data = normalizeBlockData(layoutRow.data)
+            }
+          }
         }
         return data
       },
@@ -87,22 +99,9 @@ export const Pages: CollectionConfig = {
       required: true,
       label: 'Slug',
       admin: { description: 'URL path, e.g. "about-us". Use "/" for the homepage. Must be unique per locale.' },
-      validate: async (value: string | null | undefined, { req, data, id }: { req: import('payload').PayloadRequest, data: Record<string, unknown>, id?: string | number }) => {
+      validate: (value: string | null | undefined) => {
         if (!value) return 'Slug is required.'
         if (!/^[a-z0-9/-]+$/.test(value)) return 'Slug must be lowercase with hyphens or slashes.'
-        const localeId = data?.locale
-        if (!localeId) return true // locale not yet set — skip compound check
-        const coercedLocaleId = coerceRelationshipId(localeId as string | number)
-        const existing = await req.payload.find({
-          collection: 'pages',
-          where: {
-            slug: { equals: value },
-            locale: { equals: coercedLocaleId },
-            ...(id ? { id: { not_equals: id } } : {}),
-          },
-          limit: 1,
-        })
-        if (existing.totalDocs > 0) return `A page with slug "${value}" already exists for this locale.`
         return true
       },
     },

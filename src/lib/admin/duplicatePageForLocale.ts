@@ -168,27 +168,6 @@ export async function duplicatePageForLocale({
   }
   const afterSanitize = sampleArrayRowIds({ dbLayout, contentBlocks })
 
-  // #region agent log
-  fetch('http://127.0.0.1:7778/ingest/5ad13a7a-4246-4729-b973-289d8d91b3b5', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3dd5e9' },
-    body: JSON.stringify({
-      sessionId: '3dd5e9',
-      hypothesisId: 'A',
-      location: 'duplicatePageForLocale.ts:before-create',
-      message: 'duplicate create payload ids',
-      data: {
-        pageId: coercedPageId,
-        targetLocaleId: targetLocaleIdNormalized,
-        beforeSanitize,
-        afterSanitize,
-      },
-      timestamp: Date.now(),
-      runId: 'pre-fix',
-    }),
-  }).catch(() => {})
-  // #endregion
-
   let newPage
   try {
     newPage = await payload.create({
@@ -207,41 +186,7 @@ export async function duplicatePageForLocale({
       overrideAccess: false,
       user,
     })
-    // #region agent log
-    fetch('http://127.0.0.1:7778/ingest/5ad13a7a-4246-4729-b973-289d8d91b3b5', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3dd5e9' },
-      body: JSON.stringify({
-        sessionId: '3dd5e9',
-        hypothesisId: 'A',
-        location: 'duplicatePageForLocale.ts:after-create',
-        message: 'duplicate create success',
-        data: { newPageId: newPage.id, slug: newPage.slug },
-        timestamp: Date.now(),
-        runId: 'pre-fix',
-      }),
-    }).catch(() => {})
-    // #endregion
   } catch (createErr) {
-    // #region agent log
-    fetch('http://127.0.0.1:7778/ingest/5ad13a7a-4246-4729-b973-289d8d91b3b5', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '3dd5e9' },
-      body: JSON.stringify({
-        sessionId: '3dd5e9',
-        hypothesisId: 'A',
-        location: 'duplicatePageForLocale.ts:create-error',
-        message: 'duplicate create failed',
-        data: {
-          error: createErr instanceof Error ? createErr.message : String(createErr),
-          beforeSanitize,
-          afterSanitize,
-        },
-        timestamp: Date.now(),
-        runId: 'pre-fix',
-      }),
-    }).catch(() => {})
-    // #endregion
     throw createErr
   }
 

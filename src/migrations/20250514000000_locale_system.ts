@@ -99,15 +99,20 @@ export async function up({ payload, req }: MigrateUpArgs): Promise<void> {
 
   if (existingHeaderLocale.totalDocs === 0) {
     try {
+      // @ts-expect-error header global was removed; migration references legacy data
       const headerGlobal = await payload.findGlobal({ slug: 'header', depth: 1, req })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (payload.create as any)({
         collection: 'header-locales',
         data: {
           locale: defaultLocaleId,
+          // @ts-expect-error header global was removed
           logo: (headerGlobal.logo as { id?: string | number } | null)?.id ?? null,
+          // @ts-expect-error header global was removed
           navigationItems: (headerGlobal.navigationItems as unknown[]) ?? [],
+          // @ts-expect-error header global was removed
           ctaButton: (headerGlobal.ctaButton as Record<string, unknown>) ?? {},
+          // @ts-expect-error header global was removed
           stickyHeader: (headerGlobal.stickyHeader as boolean) ?? true,
         },
         req,
@@ -132,15 +137,20 @@ export async function up({ payload, req }: MigrateUpArgs): Promise<void> {
 
   if (existingFooterLocale.totalDocs === 0) {
     try {
+      // @ts-expect-error footer global was removed; migration references legacy data
       const footerGlobal = await payload.findGlobal({ slug: 'footer', depth: 1, req })
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (payload.create as any)({
         collection: 'footer-locales',
         data: {
           locale: defaultLocaleId,
+          // @ts-expect-error footer global was removed
           logo: (footerGlobal.logo as { id?: string | number } | null)?.id ?? null,
+          // @ts-expect-error footer global was removed
           columns: (footerGlobal.columns as unknown[]) ?? [],
+          // @ts-expect-error footer global was removed
           copyright: (footerGlobal.copyright as string) ?? '',
+          // @ts-expect-error footer global was removed
           socialLinks: (footerGlobal.socialLinks as unknown[]) ?? [],
         },
         req,

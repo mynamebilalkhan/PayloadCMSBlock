@@ -6,6 +6,7 @@ import { useDocumentInfo, useFormFields, useFormModified } from '@payloadcms/ui'
 import type { UIFieldClientProps } from 'payload'
 
 import { ClientOnlyAdminField } from '@/components/admin/ClientOnlyAdminField'
+import { AdminButton, adminUIStyles } from '@/components/admin/AdminUI'
 import {
   buildPageAdminUrl,
   confirmLeaveIfModified,
@@ -127,7 +128,7 @@ function TranslationStatusContent(_props: UIFieldClientProps) {
       )}
 
       {!loading && locales.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className={adminUIStyles.stack}>
           {locales.map((locale) => {
             const page = siblingByLocale.get(String(locale.id)) as TranslationPage | undefined
             const isCurrent =
@@ -167,34 +168,13 @@ function TranslationRow({
 }) {
   const canOpen = Boolean(page && onOpen && !isCurrent)
 
-  const rowStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    padding: '6px 10px',
-    borderRadius: 6,
-    background: isCurrent ? 'var(--theme-elevation-150)' : 'var(--theme-elevation-100)',
-    border: `1px solid ${isCurrent ? 'var(--theme-success-250)' : 'var(--theme-border-color)'}`,
-    fontSize: '13px',
-    color: 'var(--theme-text)',
-    width: '100%',
-    textAlign: 'left',
-    fontFamily: 'inherit',
-  }
-
   if (canOpen) {
     return (
       <button
         type="button"
         onClick={onOpen}
         title={`Open ${locale.name} translation`}
-        style={{ ...rowStyle, cursor: 'pointer' }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = 'var(--theme-success-500)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = 'var(--theme-border-color)'
-        }}
+        className={[adminUIStyles.optionRow, adminUIStyles.optionButton].join(' ')}
       >
         <TranslationRowContent locale={locale} page={page} isCurrent={isCurrent} showOpenHint />
       </button>
@@ -202,7 +182,12 @@ function TranslationRow({
   }
 
   return (
-    <div style={rowStyle}>
+    <div
+      className={[
+        adminUIStyles.optionRow,
+        isCurrent ? adminUIStyles.optionSelected : '',
+      ].filter(Boolean).join(' ')}
+    >
       <TranslationRowContent
         locale={locale}
         page={page}
@@ -263,24 +248,16 @@ function TranslationRowContent({
         </span>
       )}
       {onCreate && (
-        <button
+        <AdminButton
           type="button"
           onClick={(e) => {
             e.stopPropagation()
             onCreate()
           }}
-          style={{
-            fontSize: '12px',
-            color: 'var(--theme-success-500)',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            fontWeight: 500,
-            padding: 0,
-          }}
+          tone="bare"
         >
           Create
-        </button>
+        </AdminButton>
       )}
     </>
   )

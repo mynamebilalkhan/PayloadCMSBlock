@@ -9,6 +9,7 @@ import {
   type PageGroup,
   type PageGroupStatusSummary,
 } from '@/lib/admin/groupPagesByTranslation'
+import { AdminBadge, AdminButton, AdminModal, adminUIStyles } from '@/components/admin/AdminUI'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -135,16 +136,8 @@ export function PagesGroupedListTable({
             setSearch(e.target.value)
             setPage(1)
           }}
-          style={{
-            flex: '1 1 220px',
-            minWidth: 200,
-            padding: '8px 12px',
-            borderRadius: 6,
-            border: '1px solid var(--theme-border-color)',
-            background: 'var(--theme-elevation-50)',
-            color: 'var(--theme-text)',
-            fontSize: '13px',
-          }}
+          className={adminUIStyles.input}
+          style={{ flex: '1 1 220px', minWidth: 200 }}
         />
         <label
           style={{
@@ -169,28 +162,12 @@ export function PagesGroupedListTable({
         </label>
       </div>
 
-      <div
-        style={{
-          border: '1px solid var(--theme-border-color)',
-          borderRadius: 8,
-          overflow: 'hidden',
-          background: 'var(--theme-elevation-0, var(--theme-bg))',
-        }}
-      >
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+      <div className={adminUIStyles.adminTableWrap}>
+        <table className={adminUIStyles.adminTable}>
           <thead>
-            <tr style={{ background: 'var(--theme-elevation-100)' }}>
+            <tr>
               {['Page Title', 'Slug', 'Locales', 'Status', 'Updated At'].map((col) => (
-                <th
-                  key={col}
-                  style={{
-                    textAlign: 'left',
-                    padding: '10px 14px',
-                    fontWeight: 600,
-                    color: 'var(--theme-elevation-600)',
-                    borderBottom: '1px solid var(--theme-border-color)',
-                  }}
-                >
+                <th key={col}>
                   {col}
                 </th>
               ))}
@@ -216,9 +193,8 @@ export function PagesGroupedListTable({
             {pageSlice.map((group) => (
               <tr
                 key={group.translationGroupId}
-                style={{ borderBottom: '1px solid var(--theme-border-color)' }}
               >
-                <td style={{ padding: '12px 14px' }}>
+                <td>
                   <Link
                     href={`/admin/collections/pages/${group.primaryPageId}`}
                     style={{
@@ -231,16 +207,12 @@ export function PagesGroupedListTable({
                   </Link>
                 </td>
                 <td
-                  style={{
-                    padding: '12px 14px',
-                    color: 'var(--theme-elevation-500)',
-                    fontFamily: 'monospace',
-                    fontSize: '12px',
-                  }}
+                  className={adminUIStyles.mono}
+                  style={{ color: 'var(--theme-elevation-500)' }}
                 >
                   {group.slug}
                 </td>
-                <td style={{ padding: '12px 14px' }}>
+                <td>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {group.translations.map(({ locale, page: localePage }) => (
                       <LocaleChip
@@ -253,15 +225,11 @@ export function PagesGroupedListTable({
                     ))}
                   </div>
                 </td>
-                <td style={{ padding: '12px 14px' }}>
+                <td>
                   <StatusBadge status={group.statusSummary} />
                 </td>
                 <td
-                  style={{
-                    padding: '12px 14px',
-                    color: 'var(--theme-elevation-500)',
-                    whiteSpace: 'nowrap',
-                  }}
+                  style={{ color: 'var(--theme-elevation-500)', whiteSpace: 'nowrap' }}
                 >
                   {formatDate(group.updatedAt)}
                 </td>
@@ -298,13 +266,8 @@ export function PagesGroupedListTable({
                 setPerPage(Number(e.target.value))
                 setPage(1)
               }}
-              style={{
-                padding: '4px 8px',
-                borderRadius: 4,
-                border: '1px solid var(--theme-border-color)',
-                background: 'var(--theme-elevation-50)',
-                color: 'var(--theme-text)',
-              }}
+              className={adminUIStyles.select}
+              style={{ minHeight: 32, padding: '4px 8px' }}
             >
               {perPageOptions.map((n) => (
                 <option key={n} value={n}>
@@ -420,17 +383,8 @@ function LocaleChip({
 
 function StatusBadge({ status }: { status: PageGroupStatusSummary }) {
   const label = status.charAt(0).toUpperCase() + status.slice(1)
-  return (
-    <span
-      style={{
-        fontSize: '12px',
-        fontWeight: 500,
-        color: statusColors[status],
-      }}
-    >
-      {label}
-    </span>
-  )
+  const tone = status === 'published' ? 'success' : status === 'draft' ? 'warning' : 'muted'
+  return <AdminBadge tone={tone}>{label}</AdminBadge>
 }
 
 function PaginationControls({
@@ -443,7 +397,7 @@ function PaginationControls({
   onPageChange: (p: number) => void
 }) {
   return (
-    <div style={{ display: 'flex', gap: 6 }}>
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
       <PagerButton disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
         Prev
       </PagerButton>
@@ -467,22 +421,14 @@ function PagerButton({
   onClick: () => void
 }) {
   return (
-    <button
+    <AdminButton
       type="button"
       disabled={disabled}
       onClick={onClick}
-      style={{
-        padding: '4px 10px',
-        borderRadius: 4,
-        border: '1px solid var(--theme-border-color)',
-        background: disabled ? 'var(--theme-elevation-100)' : 'var(--theme-elevation-50)',
-        color: disabled ? 'var(--theme-elevation-400)' : 'var(--theme-text)',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        fontSize: '12px',
-      }}
+      style={{ minHeight: 28, padding: '4px 10px', fontSize: 12 }}
     >
       {children}
-    </button>
+    </AdminButton>
   )
 }
 
@@ -500,82 +446,27 @@ function DuplicateModal({
   onClose: () => void
 }) {
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.5)',
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div
-        style={{
-          background: 'var(--theme-elevation-0, var(--theme-bg))',
-          border: '1px solid var(--theme-border-color)',
-          borderRadius: 12,
-          padding: 24,
-          minWidth: 320,
-          maxWidth: 420,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
-          color: 'var(--theme-text)',
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 style={{ margin: '0 0 12px', fontSize: '16px', fontWeight: 600 }}>
-          Create translation
-        </h3>
-        <p style={{ margin: '0 0 16px', fontSize: '13px', color: 'var(--theme-elevation-400)' }}>
-          Create a draft copy for{' '}
-          <strong>
-            {locale.flag} {locale.name} ({locale.code})
-          </strong>{' '}
-          with the same page builder layout.
-        </p>
-        {error && (
-          <p style={{ color: 'var(--theme-error-500)', fontSize: '13px', marginBottom: 12 }}>
-            {error}
-          </p>
-        )}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 6,
-              border: '1px solid var(--theme-border-color)',
-              background: 'var(--theme-elevation-100)',
-              color: 'var(--theme-text)',
-              fontSize: '13px',
-              cursor: 'pointer',
-            }}
-          >
+    <AdminModal
+      title="Create translation"
+      description={`Create a draft copy for ${locale.name} (${locale.code}) with the same page builder layout.`}
+      onClose={onClose}
+      footer={
+        <>
+          <AdminButton type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            disabled={loading}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 6,
-              border: 'none',
-              background: loading ? 'var(--theme-elevation-300)' : 'var(--theme-success-500)',
-              color: loading ? 'var(--theme-elevation-500)' : '#fff',
-              fontSize: '13px',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              fontWeight: 500,
-            }}
-          >
+          </AdminButton>
+          <AdminButton type="button" onClick={onConfirm} disabled={loading} tone="primary">
             {loading ? 'Creating…' : 'Create translation'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </AdminButton>
+        </>
+      }
+    >
+      {error && (
+        <p className={adminUIStyles.mutedText} style={{ color: 'var(--theme-error-500)' }}>
+          {error}
+        </p>
+      )}
+    </AdminModal>
   )
 }
 

@@ -15,7 +15,7 @@ import {
   HeaderLocales,
   FooterLocales,
 } from '@/collections'
-import { Header, Footer, Theme } from '@/globals'
+import { Theme } from '@/globals'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -72,7 +72,7 @@ export default buildConfig({
       ],
     },
   ],
-  globals: [Header, Footer, Theme],
+  globals: [Theme],
   editor: lexicalEditor({}),
   db: postgresAdapter({
     pool: {

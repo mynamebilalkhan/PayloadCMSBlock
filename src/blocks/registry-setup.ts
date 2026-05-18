@@ -20,6 +20,14 @@ import { TestimonialsBlock } from './Testimonials'
 import { FAQBlock }          from './FAQ'
 import { PricingBlock }      from './Pricing'
 
+// ─── Nextbridge home blocks ───────────────────────────────────────────────────
+import { HomeBannerBlock } from './HomeBanner'
+import { HomeVideoBlock }  from './HomeVideo'
+import { HomeStoryBlock }  from './HomeStory'
+import { HomeDoorsBlock }  from './HomeDoors'
+import { HomeVoicesBlock } from './HomeVoices'
+import { HomeCtaBlock }    from './HomeCta'
+
 // ─── Registrations ────────────────────────────────────────────────────────────
 
 registry.register('hero-banner',  HeroBannerBlock  as unknown as BlockComponent)
@@ -30,5 +38,12 @@ registry.register('cta',          CTABlock         as unknown as BlockComponent)
 registry.register('testimonials', TestimonialsBlock as unknown as BlockComponent)
 registry.register('faq',          FAQBlock         as unknown as BlockComponent)
 registry.register('pricing',      PricingBlock     as unknown as BlockComponent)
+
+registry.register('homebanner',  HomeBannerBlock as unknown as BlockComponent)
+registry.register('home-video', HomeVideoBlock  as unknown as BlockComponent)
+registry.register('home-story', HomeStoryBlock  as unknown as BlockComponent)
+registry.register('home-doors', HomeDoorsBlock  as unknown as BlockComponent)
+registry.register('home-voices', HomeVoicesBlock as unknown as BlockComponent)
+registry.register('home-cta',   HomeCtaBlock    as unknown as BlockComponent)
 
 export { registry }

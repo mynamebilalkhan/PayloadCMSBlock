@@ -1,3 +1,1 @@
-export { Header } from './Header'
-export { Footer } from './Footer'
-export { Theme }  from './Theme'
+export { Theme } from './Theme'

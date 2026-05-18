@@ -18,7 +18,6 @@ export async function GET(req: NextRequest) {
   const slug = req.nextUrl.searchParams.get('slug') ?? '/'
   const locale = req.nextUrl.searchParams.get('locale') ?? 'en'
 
-  // Build the locale-prefixed path
   const slugPath = slug === '/' ? '' : `/${slug}`
   const path = `/${locale}${slugPath}`
 

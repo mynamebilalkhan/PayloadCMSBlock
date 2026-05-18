@@ -1,3 +1,4 @@
+import { isLexicalState } from '@/lib/isLexicalState'
 import type {
   BlockSchema,
   BlockField,
@@ -284,10 +285,20 @@ function validateFieldValue(
       break
     }
 
-    // ── Rich text / JSON ──────────────────────────────────────────────────────
-    case 'richtext':
+    // ── Rich text ─────────────────────────────────────────────────────────────
+    case 'richtext': {
+      if (value === null || value === undefined) break
+      if (typeof value === 'string') break // legacy HTML
+      if (isLexicalState(value)) break
+      errors.push({
+        path,
+        message: 'Expected Lexical editor state (object with root) or legacy HTML string.',
+      })
+      break
+    }
+
+    // ── JSON ──────────────────────────────────────────────────────────────────
     case 'json': {
-      // Structural validity not checked — any value accepted
       break
     }
 

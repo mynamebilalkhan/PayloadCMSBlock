@@ -22,14 +22,14 @@ export function SiteFooter(_props: SiteFooterProps) {
         <div className="text-[0.78rem] font-normal text-nb-text-secondary">
           &copy; 2026 NEXTBRIDGE LIMITED. All rights reserved.
         </div>
-        <div className="text-[0.65rem] font-normal tracking-[0.08em] text-[#B0AEA6]">v1.09</div>
+        {/* <div className="text-[0.65rem] font-normal tracking-[0.08em] text-[#B0AEA6]">v1.09</div> */}
       </div>
       <ul className="flex gap-8 list-none m-0 p-0">
         {[
-          { label: 'careers', href: '/careers' },
-          { label: 'nextbridge motorsports', href: '/motorsports' },
-          { label: 'privacy', href: '/privacy' },
-          { label: 'linkedin', href: 'https://linkedin.com', external: true },
+          { label: 'Careers', href: '/careers' },
+          { label: 'Nextbridge Motorsports', href: '/motorsports' },
+          { label: 'Privacy', href: '/privacy' },
+          { label: 'LinkedIn', href: 'https://www.linkedin.com/company/nextbridge/', external: true },
         ].map((link, i) => (
           <li key={i}>
             <a

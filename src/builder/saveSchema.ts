@@ -31,6 +31,17 @@ export async function saveSchemaLocally(
   const schema = normaliseSchema(rawSchema as Parameters<typeof normaliseSchema>[0])
 
   // 2 — Validate
+  if (!schema.fields?.length) {
+    return {
+      success: false,
+      definitionId: '',
+      versionId: '',
+      versionNumber: 0,
+      errors: [`Block "${blockSlug}" schema has no fields. Schemas must be imported from a server-safe module (not a "use client" file).`],
+      warnings: [],
+    }
+  }
+
   const validation = validateBlockSchema(schema)
   if (!validation.valid) {
     return {

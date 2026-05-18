@@ -72,21 +72,39 @@ Trace from URL → HTML:
 
 ## Environment & scripts
 
-Copy **`.env.example`** and set:
+Install dependencies, copy **`.env.example`** to **`.env`**, and set:
 
 - `DATABASE_URI`
 - `PAYLOAD_SECRET`
 - `NEXT_PUBLIC_SERVER_URL`
+
+First-time setup:
+
+```bash
+pnpm install
+pnpm migrate:status
+pnpm migrate:run
+pnpm dev
+```
+
+Optional demo content:
+
+```bash
+pnpm seed
+```
+
+Use seed only when you want a local demo page and starter block definitions. For a customer handoff or a clean production install, run migrations and let the buyer create their own locales, header/footer, pages, and block definitions from Admin.
 
 Common commands:
 
 ```bash
 pnpm dev
 pnpm build && pnpm start
-pnpm seed
+pnpm seed # optional demo content
 pnpm exec payload generate:types
 pnpm exec payload generate:importmap
-pnpm exec payload migrate
+pnpm migrate:status
+pnpm migrate:run
 ```
 
 Requirements: Node `^18.20.2 || >=20.9.0`, **pnpm** 9 or 10.

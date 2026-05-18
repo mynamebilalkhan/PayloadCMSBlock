@@ -52,12 +52,13 @@ const HAS_NESTED = new Set<FieldType>(['array', 'group'])
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const inputStyle: React.CSSProperties = {
-  padding: '0.375rem 0.5rem',
-  border: '1px solid var(--theme-elevation-200, #d1d5db)',
-  borderRadius: '0.25rem',
-  background: 'var(--theme-elevation-0, #fff)',
+  minHeight: 32,
+  padding: '6px 8px',
+  border: '1px solid var(--theme-elevation-150)',
+  borderRadius: 3,
+  background: 'var(--theme-input-bg)',
   fontSize: '0.8125rem',
-  color: 'var(--theme-text, #111827)',
+  color: 'var(--theme-text)',
   outline: 'none',
   boxSizing: 'border-box',
 }
@@ -84,14 +85,15 @@ const subSectionStyle: React.CSSProperties = {
 }
 
 const iconBtn: React.CSSProperties = {
-  padding: '0.125rem 0.375rem',
+  minHeight: 28,
+  padding: '3px 8px',
   fontSize: '0.75rem',
-  background: 'transparent',
-  border: '1px solid var(--theme-elevation-200, #e5e7eb)',
-  borderRadius: '0.25rem',
+  background: 'var(--theme-elevation-100)',
+  border: '1px solid var(--theme-elevation-150)',
+  borderRadius: 3,
   cursor: 'pointer',
   lineHeight: 1.4,
-  color: 'var(--theme-elevation-700, #374151)',
+  color: 'var(--theme-text)',
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -221,10 +223,10 @@ export function FieldRow({
   return (
     <div
       style={{
-        border: '1px solid var(--theme-elevation-200, #e5e7eb)',
-        borderRadius: '0.375rem',
+        border: '1px solid var(--theme-elevation-150)',
+        borderRadius: 3,
         overflow: 'hidden',
-        background: 'var(--theme-elevation-0, #fff)',
+        background: 'var(--theme-bg)',
       }}
     >
       {/* ── Header bar ───────────────────────────────────── */}
@@ -234,8 +236,8 @@ export function FieldRow({
           alignItems: 'center',
           gap: '0.5rem',
           padding: '0.5rem 0.75rem',
-          background: 'var(--theme-elevation-100, #f3f4f6)',
-          borderBottom: '1px solid var(--theme-elevation-150, #e5e7eb)',
+          background: 'var(--theme-elevation-50)',
+          borderBottom: '1px solid var(--theme-elevation-150)',
         }}
       >
         {/* Index + type badge */}

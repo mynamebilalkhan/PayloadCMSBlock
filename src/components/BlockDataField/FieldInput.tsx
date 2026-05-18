@@ -8,6 +8,7 @@ import { ArrayFieldInput } from './ArrayFieldInput'
 import { GroupFieldInput } from './GroupFieldInput'
 import { MediaPickerInput } from './MediaPickerInput'
 import { BlocksFieldInput } from './BlocksFieldInput'
+import { RichTextInput } from './RichTextInput'
 
 type Props = {
   field: BlockField
@@ -99,12 +100,13 @@ function ResponsiveWrapper({
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  padding: '0.5rem 0.75rem',
-  border: '1px solid var(--theme-elevation-200, #d1d5db)',
-  borderRadius: '0.25rem',
-  background: 'var(--theme-elevation-0, #fff)',
+  minHeight: 40,
+  padding: '8px 12px',
+  border: '1px solid var(--theme-elevation-150)',
+  borderRadius: 3,
+  background: 'var(--theme-input-bg)',
   fontSize: '0.875rem',
-  color: 'var(--theme-text, #111827)',
+  color: 'var(--theme-text)',
   outline: 'none',
   boxSizing: 'border-box',
 }
@@ -114,12 +116,12 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 500,
   fontSize: '0.8125rem',
   marginBottom: '0.25rem',
-  color: 'var(--theme-text, #374151)',
+  color: 'var(--theme-elevation-800)',
 }
 
 const descStyle: React.CSSProperties = {
   fontSize: '0.75rem',
-  color: 'var(--theme-elevation-500, #6b7280)',
+  color: 'var(--theme-elevation-500)',
   marginTop: '0.25rem',
 }
 
@@ -227,17 +229,15 @@ export function FieldInput({ field, value, onChange, readOnly }: Props) {
 
     case 'richtext':
       return (
-        <FieldWrapper label={field.label} required={field.required} description={field.admin?.description}>
-          <textarea
-            value={typeof value === 'string' ? value : ''}
-            placeholder={field.admin?.placeholder ?? 'Enter HTML or plain text…'}
-            disabled={disabled}
-            rows={6}
-            onChange={(e) => onChange(e.target.value)}
-            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: '0.8125rem' }}
-          />
-          <p style={descStyle}>Rich text — HTML accepted.</p>
-        </FieldWrapper>
+        <RichTextInput
+          fieldName={field.name}
+          label={field.label}
+          required={field.required}
+          description={field.admin?.description}
+          value={value}
+          onChange={onChange}
+          readOnly={disabled}
+        />
       )
 
     case 'number':

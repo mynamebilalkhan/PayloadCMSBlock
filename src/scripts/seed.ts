@@ -12,7 +12,7 @@
 import 'dotenv/config'
 import { getPayload } from 'payload'
 import config from '@payload-config'
-import { saveSchemaLocally } from '@/builder'
+import { normaliseSchema, saveSchemaLocally } from '@/builder'
 
 // ─── Schema imports ───────────────────────────────────────────────────────────
 import { heroBannerSchema }  from '@/blocks/HeroBanner'
@@ -23,6 +23,14 @@ import { ctaSchema }         from '@/blocks/CTA'
 import { testimonialsSchema } from '@/blocks/Testimonials'
 import { faqSchema }         from '@/blocks/FAQ'
 import { pricingSchema }     from '@/blocks/Pricing'
+import {
+  homeBannerSchema,
+  homeVideoSchema,
+  homeStorySchema,
+  homeDoorsSchema,
+  homeVoicesSchema,
+  homeCtaSchema,
+} from '@/blocks/home/schemas'
 
 // ─── Preset imports ───────────────────────────────────────────────────────────
 import { heroBannerPresets }   from '@/blocks/HeroBanner/presets'
@@ -31,10 +39,74 @@ import { ctaPresets }          from '@/blocks/CTA/presets'
 import { testimonialsPresets } from '@/blocks/Testimonials/presets'
 import { faqPresets }          from '@/blocks/FAQ/presets'
 import { pricingPresets }      from '@/blocks/Pricing/presets'
+import { homeBannerPresets }   from '@/blocks/HomeBanner/presets'
+import { homeVideoPresets }    from '@/blocks/HomeVideo/presets'
+import { homeStoryPresets }    from '@/blocks/HomeStory/presets'
+import { homeDoorsPresets }    from '@/blocks/HomeDoors/presets'
+import { homeVoicesPresets }   from '@/blocks/HomeVoices/presets'
+import { homeCtaPresets }      from '@/blocks/HomeCta/presets'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const toId = (s: string) => parseInt(s, 10)
+
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(',')}]`
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+async function findCurrentMatchingVersion(
+  payload: Awaited<ReturnType<typeof getPayload>>,
+  blockSlug: string,
+  rawSchema: unknown,
+): Promise<{ definitionId: string; versionId: string; versionNumber: number } | null> {
+  const existing = await payload.find({
+    collection: 'block-definitions',
+    where: { slug: { equals: blockSlug } },
+    depth: 1,
+    limit: 1,
+  })
+
+  const definition = existing.docs[0] as
+    | {
+        id: string | number
+        currentVersion?: {
+          id?: string | number
+          schema?: unknown
+          versionNumber?: number | null
+        } | number | string | null
+      }
+    | undefined
+
+  if (!definition || !definition.currentVersion || typeof definition.currentVersion !== 'object') {
+    return null
+  }
+
+  const currentVersion = definition.currentVersion
+  if (!currentVersion.id) return null
+
+  const currentSchema = normaliseSchema(currentVersion.schema as Parameters<typeof normaliseSchema>[0])
+  const nextSchema = normaliseSchema(rawSchema as Parameters<typeof normaliseSchema>[0])
+
+  if (stableStringify(currentSchema) !== stableStringify(nextSchema)) {
+    return null
+  }
+
+  return {
+    definitionId: String(definition.id),
+    versionId: String(currentVersion.id),
+    versionNumber: currentVersion.versionNumber ?? 0,
+  }
+}
 
 // ─── Block definition registry ────────────────────────────────────────────────
 
@@ -47,6 +119,12 @@ const blockDefs = [
   { blockSlug: 'testimonials', name: 'Testimonials', category: 'content' as const, description: 'Customer testimonial grid with ratings and featured layout.',        schema: testimonialsSchema, changelog: 'Initial version' },
   { blockSlug: 'faq',          name: 'FAQ',          category: 'content' as const, description: 'Accordion FAQ block with single and two-column layouts.',            schema: faqSchema,          changelog: 'Initial version' },
   { blockSlug: 'pricing',      name: 'Pricing',      category: 'content' as const, description: 'Pricing plan cards with highlight support and 4 style variants.',    schema: pricingSchema,      changelog: 'Initial version' },
+  { blockSlug: 'homebanner',   name: 'Home Banner',  category: 'content' as const, description: 'Nextbridge homepage hero and proof strip.',                          schema: homeBannerSchema,   changelog: 'Initial version' },
+  { blockSlug: 'home-video',   name: 'Home Video',   category: 'content' as const, description: 'Nextbridge engineering floor video.',                                schema: homeVideoSchema,    changelog: 'Initial version' },
+  { blockSlug: 'home-story',   name: 'Home Story',   category: 'content' as const, description: 'Nextbridge homepage story section.',                                 schema: homeStorySchema,    changelog: 'Initial version' },
+  { blockSlug: 'home-doors',   name: 'Home Doors',   category: 'content' as const, description: 'Nextbridge homepage door cards.',                                    schema: homeDoorsSchema,    changelog: 'Initial version' },
+  { blockSlug: 'home-voices',  name: 'Home Voices',  category: 'content' as const, description: 'Nextbridge homepage client testimonials.',                           schema: homeVoicesSchema,   changelog: 'Initial version' },
+  { blockSlug: 'home-cta',     name: 'Home CTA',     category: 'content' as const, description: 'Nextbridge homepage closing call to action.',                        schema: homeCtaSchema,      changelog: 'Initial version' },
 ]
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -59,23 +137,33 @@ async function seed() {
   const results: Record<string, { definitionId: string; versionId: string }> = {}
 
   for (const block of blockDefs) {
+    const existingVersion = await findCurrentMatchingVersion(payload, block.blockSlug, block.schema)
+    if (existingVersion) {
+      results[block.blockSlug] = {
+        definitionId: existingVersion.definitionId,
+        versionId: existingVersion.versionId,
+      }
+      console.log(`- ${block.blockSlug} - v${existingVersion.versionNumber} unchanged (id: ${existingVersion.versionId})`)
+      continue
+    }
+
     const result = await saveSchemaLocally(payload, block)
     if (result.success) {
       results[block.blockSlug] = {
         definitionId: result.definitionId,
         versionId: result.versionId,
       }
-      console.log(`✓ ${block.blockSlug} — v${result.versionNumber} (id: ${result.versionId})`)
-      if (result.warnings?.length) result.warnings.forEach(w => console.warn(`  ⚠ ${w}`))
+      console.log(`+ ${block.blockSlug} - v${result.versionNumber} (id: ${result.versionId})`)
+      if (result.warnings?.length) result.warnings.forEach(w => console.warn(`  ! ${w}`))
     } else {
-      console.error(`✗ ${block.blockSlug}:`, result.errors?.join(', '))
+      console.error(`x ${block.blockSlug}:`, result.errors?.join(', '))
     }
   }
 
   // Abort if any definition failed
   const missing = blockDefs.filter(b => !results[b.blockSlug])
   if (missing.length > 0) {
-    console.error(`\n✗ Aborting page seed — failed: ${missing.map(b => b.blockSlug).join(', ')}`)
+    console.error(`\nx Aborting page seed - failed: ${missing.map(b => b.blockSlug).join(', ')}`)
     process.exit(1)
   }
 
@@ -83,58 +171,50 @@ async function seed() {
 
   const r = results as Record<string, { definitionId: string; versionId: string }>
 
+  const NEXTBRIDGE_HOME_BLOCK_COUNT = 6
+
   const layoutBlocks = [
-    // 1 — Hero
     {
-      blockDefinition: toId(r['hero-banner']!.definitionId),
-      blockVersion:    toId(r['hero-banner']!.versionId),
-      label: 'Hero',
+      blockDefinition: toId(r['homebanner']!.definitionId),
+      blockVersion:    toId(r['homebanner']!.versionId),
+      label: 'Banner',
       hidden: false,
-      data: heroBannerPresets[0]!.data,
+      data: homeBannerPresets[0]!.data,
     },
-    // 2 — Features (SaaS)
     {
-      blockDefinition: toId(r['features']!.definitionId),
-      blockVersion:    toId(r['features']!.versionId),
-      label: 'Features',
+      blockDefinition: toId(r['home-video']!.definitionId),
+      blockVersion:    toId(r['home-video']!.versionId),
+      label: 'Video',
       hidden: false,
-      anchor: 'features',
-      data: featuresPresets[0]!.data,
+      data: homeVideoPresets[0]!.data,
     },
-    // 3 — Testimonials (default grid)
     {
-      blockDefinition: toId(r['testimonials']!.definitionId),
-      blockVersion:    toId(r['testimonials']!.versionId),
-      label: 'Testimonials',
+      blockDefinition: toId(r['home-story']!.definitionId),
+      blockVersion:    toId(r['home-story']!.versionId),
+      label: 'Story',
       hidden: false,
-      anchor: 'testimonials',
-      data: testimonialsPresets[0]!.data,
+      data: homeStoryPresets[0]!.data,
     },
-    // 4 — Pricing (SaaS tiers)
     {
-      blockDefinition: toId(r['pricing']!.definitionId),
-      blockVersion:    toId(r['pricing']!.versionId),
-      label: 'Pricing',
+      blockDefinition: toId(r['home-doors']!.definitionId),
+      blockVersion:    toId(r['home-doors']!.versionId),
+      label: 'Doors',
       hidden: false,
-      anchor: 'pricing',
-      data: pricingPresets[0]!.data,
+      data: homeDoorsPresets[0]!.data,
     },
-    // 5 — FAQ
     {
-      blockDefinition: toId(r['faq']!.definitionId),
-      blockVersion:    toId(r['faq']!.versionId),
-      label: 'FAQ',
+      blockDefinition: toId(r['home-voices']!.definitionId),
+      blockVersion:    toId(r['home-voices']!.versionId),
+      label: 'Voices',
       hidden: false,
-      anchor: 'faq',
-      data: faqPresets[0]!.data,
+      data: homeVoicesPresets[0]!.data,
     },
-    // 6 — CTA (bottom of page)
     {
-      blockDefinition: toId(r['cta']!.definitionId),
-      blockVersion:    toId(r['cta']!.versionId),
+      blockDefinition: toId(r['home-cta']!.definitionId),
+      blockVersion:    toId(r['home-cta']!.versionId),
       label: 'CTA',
       hidden: false,
-      data: ctaPresets[0]!.data,
+      data: homeCtaPresets[0]!.data,
     },
   ]
 
@@ -147,7 +227,7 @@ async function seed() {
   })
   const defaultLocale = defaultLocaleResult.docs[0]
   if (!defaultLocale) {
-    console.error('\n✗ No default locale found. Run migrations or create a locale in Admin first.')
+    console.error('\nx No default locale found. Run migrations or create a locale in Admin first.')
     process.exit(1)
   }
 
@@ -164,26 +244,29 @@ async function seed() {
     locale: defaultLocale.id,
     status: 'published',
     seo: {
-      metaTitle: 'Dynamic Block Site — Build faster with blocks',
-      metaDescription: 'Compose beautiful pages from reusable content blocks. Powered by Payload CMS and Next.js.',
+      metaTitle: 'NEXTBRIDGE — Engineering since 1996',
+      metaDescription: 'Senior engineers embedded into product teams. Built to deliver, not to sell.',
     },
     dbLayout: layoutBlocks,
   }
+
+  const { slug: _slug, ...pageRepairData } = pageData
 
   if (existing.docs.length > 0) {
     const page = existing.docs[0]!
     const currentLayoutLength = ((page.dbLayout as unknown[]) ?? []).length
 
-    if (currentLayoutLength < 4) {
+    if (currentLayoutLength < NEXTBRIDGE_HOME_BLOCK_COUNT) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (payload.update as any)({
         collection: 'pages',
         id: page.id,
-        data: pageData,
+        data: pageRepairData,
+        skipValidation: true,
       })
-      console.log(`✓ Home page updated with full block demo (was ${currentLayoutLength} blocks, now ${layoutBlocks.length})`)
+      console.log(`+ Home page updated with Nextbridge layout (was ${currentLayoutLength} blocks, now ${layoutBlocks.length})`)
     } else {
-      console.log(`→ Home page already has ${currentLayoutLength} blocks — skipping update`)
+      console.log(`- Home page already has ${currentLayoutLength} blocks - skipping update`)
     }
   } else {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -191,7 +274,7 @@ async function seed() {
       collection: 'pages',
       data: pageData,
     })
-    console.log(`✓ Home page created with ${layoutBlocks.length} prebuilt blocks`)
+    console.log(`+ Home page created with ${layoutBlocks.length} prebuilt blocks`)
   }
 
   console.log('\nDone. Run `pnpm dev` and visit http://localhost:3000 to see the demo.')

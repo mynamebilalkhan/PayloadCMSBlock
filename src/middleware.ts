@@ -45,7 +45,7 @@ export const config = {
      * - /_next/* — Next.js internals
      * - /favicon.ico, /robots.txt, /sitemap.xml, static assets
      */
-    '/((?!api|admin|block-builder|_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|otf|css|js)).*)',
+    '/((?!api|admin|block-builder|media|_next/static|_next/image|favicon\\.ico|robots\\.txt|sitemap\\.xml|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|otf|css|js|mp4|webm)).*)',
   ],
 }
 

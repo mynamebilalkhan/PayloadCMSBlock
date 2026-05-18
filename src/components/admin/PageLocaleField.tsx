@@ -11,6 +11,7 @@ import {
 } from '@payloadcms/ui'
 
 import { ClientOnlyAdminField } from '@/components/admin/ClientOnlyAdminField'
+import { adminUIStyles } from '@/components/admin/AdminUI'
 import {
   buildPageAdminUrl,
   confirmLeaveIfModified,
@@ -132,16 +133,8 @@ function PageLocaleSwitcher({
           setSelectedId(next)
           void handleSwitch(next)
         }}
-        style={{
-          width: '100%',
-          padding: '10px 12px',
-          borderRadius: 4,
-          border: '1px solid var(--theme-border-color)',
-          background: 'var(--theme-elevation-50)',
-          color: 'var(--theme-text)',
-          fontSize: '13px',
-          cursor: loading || switching ? 'wait' : 'pointer',
-        }}
+        className={adminUIStyles.select}
+        style={{ cursor: loading || switching ? 'wait' : 'pointer' }}
       >
         {locales.length === 0 && (
           <option value={selectedId}>{loading ? 'Loading…' : 'No locales'}</option>

@@ -119,6 +119,15 @@ export const BlockDefinitionVersions: CollectionConfig = {
       admin: { readOnly: true, description: 'Display label, e.g. "v3".' },
     },
     {
+      name: '_dynamicBlockRichText',
+      type: 'richText',
+      admin: {
+        hidden: true,
+        description:
+          'Internal editor profile for dynamic block richtext fields (not edited directly).',
+      },
+    },
+    {
       name: 'schema',
       type: 'json',
       required: true,
