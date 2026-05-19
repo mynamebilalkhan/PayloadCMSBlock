@@ -47,9 +47,11 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Save ──────────────────────────────────────────────────────────────────
+  console.log('[blocks/save] Saving block:', body.blockSlug, 'fields:', body.schema?.fields?.map((f) => `${(f as {name?: string}).name ?? 'unnamed'}(${(f as {type?: string}).type ?? 'unknown'})`).join(', '))
   const result = await saveSchemaLocally(payload, body)
 
   if (!result.success) {
+    console.log('[blocks/save] Validation failed for', body.blockSlug, ':', result.errors)
     return NextResponse.json({ error: 'Validation failed', details: result.errors }, { status: 422 })
   }
 

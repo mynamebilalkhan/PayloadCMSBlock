@@ -7,7 +7,17 @@ const TYPE_MAP: Record<string, string> = {
   radio: "select",
 };
 
-const UNSUPPORTED = new Set(["code", "point", "ui", "tabs", "collapsible"]);
+const UNSUPPORTED = new Set(["code", "point", "ui", "tabs", "collapsible", "row"]);
+
+/** Convert camelCase/PascalCase to kebab-case for Payload slug validation */
+function normalizeSlug(slug: string): string {
+  return slug
+    .replace(/([a-z])([A-Z])/g, "$1-$2") // Insert hyphen between camelCase
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
 
 export function mapToSaveRequest(block: BlockDefinition): SaveSchemaRequest {
   const fields = block.fields
@@ -24,7 +34,7 @@ export function mapToSaveRequest(block: BlockDefinition): SaveSchemaRequest {
     }));
 
   return {
-    blockSlug: block.slug,
+    blockSlug: normalizeSlug(block.slug),
     name: block.labels?.singular ?? block.slug,
     schema: { fields },
     changelog: "Created via block builder",

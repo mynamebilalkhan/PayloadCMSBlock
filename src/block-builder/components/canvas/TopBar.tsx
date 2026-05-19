@@ -9,7 +9,7 @@ import type { GeneratedOutput } from "@/block-builder/types";
 type PublishStatus = "idle" | "publishing" | "success" | "error";
 
 export function TopBar() {
-  const { blocks, isDirty, reset, markClean } = useBuilderStore();
+  const { blocks, activeBlockId, isDirty, reset, markClean } = useBuilderStore();
   const [exporting, setExporting] = useState(false);
   const [publishStatus, setPublishStatus] = useState<PublishStatus>("idle");
   const [publishMessage, setPublishMessage] = useState("");
@@ -43,37 +43,36 @@ export function TopBar() {
   }
 
   async function handlePublish() {
-    if (blocks.length === 0) return;
+    if (blocks.length === 0 || !activeBlockId) return;
+
+    const activeBlock = blocks.find((b) => b.id === activeBlockId);
+    if (!activeBlock) return;
+
     setPublishStatus("publishing");
     setPublishMessage("");
 
-    const results: string[] = [];
-    let hasError = false;
+    try {
+      const body = mapToSaveRequest(activeBlock);
+      const res = await fetch('/api/blocks/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
 
-    for (const block of blocks) {
-      try {
-        const body = mapToSaveRequest(block);
-        const res = await fetch('/api/blocks/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-
-        if (res.ok) {
-          results.push(`✓ ${block.slug}`);
-        } else {
-          const err = await res.json().catch(() => ({}));
-          results.push(`✗ ${block.slug}: ${err.error ?? res.statusText}`);
-          hasError = true;
-        }
-      } catch (e) {
-        results.push(`✗ ${block.slug}: network error`);
-        hasError = true;
+      if (res.ok) {
+        setPublishStatus("success");
+        setPublishMessage(`✓ ${activeBlock.slug} published`);
+        markClean();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setPublishStatus("error");
+        setPublishMessage(`✗ ${activeBlock.slug}: ${err.error ?? res.statusText}`);
       }
+    } catch (e) {
+      setPublishStatus("error");
+      setPublishMessage(`✗ ${activeBlock.slug}: network error`);
     }
 
-    setPublishStatus(hasError ? "error" : "success");
-    setPublishMessage(results.join(" · "));
     setTimeout(() => setPublishStatus("idle"), 4000);
   }
 
@@ -160,7 +159,7 @@ export function TopBar() {
 
           <button
             onClick={handlePublish}
-            disabled={blocks.length === 0 || publishStatus === "publishing"}
+            disabled={blocks.length === 0 || !activeBlockId || publishStatus === "publishing"}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded font-medium transition-opacity disabled:opacity-40"
             style={{ background: "var(--payload-accent)", color: "#000" }}
           >
