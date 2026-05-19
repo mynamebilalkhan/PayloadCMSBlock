@@ -151,6 +151,16 @@ export const Pages: CollectionConfig = {
       },
     },
     {
+      name: 'translationReference',
+      type: 'ui',
+      admin: {
+        position: 'sidebar',
+        components: {
+          Field: '@/components/admin/TranslationReferencePanel#TranslationReferencePanel',
+        },
+      },
+    },
+    {
       name: 'status',
       type: 'select',
       options: [
