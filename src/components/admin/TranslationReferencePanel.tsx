@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useFormFields, useField } from '@payloadcms/ui'
 import type { UIFieldClientProps } from 'payload'
 
@@ -68,6 +68,9 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
   const [copyingBlocks, setCopyingBlocks] = useState(false)
   const [copySuccess, setCopySuccess] = useState<string | null>(null)
   const [showCopyConfirm, setShowCopyConfirm] = useState(false)
+  const [aiTranslating, setAiTranslating] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [aiSuccess, setAiSuccess] = useState<string | null>(null)
 
   // Form field bindings for direct editing
   const titleField = useField<string>({ path: 'title' })
@@ -75,6 +78,19 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
   const metaTitleField = useField<string>({ path: 'seo.metaTitle' })
   const metaDescField = useField<string>({ path: 'seo.metaDescription' })
   const dbLayoutField = useField<Array<{ data?: Record<string, unknown> }>>({ path: 'dbLayout' })
+
+  // Stable refs so deferred setTimeout callbacks always call the latest setValue
+  const titleSetValueRef = useRef(titleField.setValue)
+  const metaTitleSetValueRef = useRef(metaTitleField.setValue)
+  const metaDescSetValueRef = useRef(metaDescField.setValue)
+  const dbLayoutSetValueRef = useRef(dbLayoutField.setValue)
+  const dbLayoutValueRef = useRef(dbLayoutField.value)
+
+  useEffect(() => { titleSetValueRef.current = titleField.setValue })
+  useEffect(() => { metaTitleSetValueRef.current = metaTitleField.setValue })
+  useEffect(() => { metaDescSetValueRef.current = metaDescField.setValue })
+  useEffect(() => { dbLayoutSetValueRef.current = dbLayoutField.setValue })
+  useEffect(() => { dbLayoutValueRef.current = dbLayoutField.value })
 
   const fetchReference = useCallback(async () => {
     if (!translationGroupId) return
@@ -105,6 +121,139 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
   useEffect(() => {
     fetchReference()
   }, [fetchReference])
+
+  const doAiTranslate = useCallback(async () => {
+    if (!reference) return
+
+    setAiTranslating(true)
+    setAiError(null)
+    setAiSuccess(null)
+
+    try {
+      const { page, defaultLocale } = reference
+
+      // Resolve target locale — may be an object { code }, a string code, or a numeric ID.
+      // The API route handles all three cases by resolving IDs server-side.
+      const targetLocaleCode =
+        typeof currentLocale === 'object' && currentLocale !== null
+          ? currentLocale.code
+          : currentLocale !== undefined && currentLocale !== null
+            ? String(currentLocale)
+            : undefined
+
+      if (!targetLocaleCode) {
+        throw new Error('Cannot determine target locale. Save the page first.')
+      }
+
+      // ── 1. Collect simple page-level translatable fields ──────────────────
+      const content: Record<string, string> = {}
+
+      if (page.title) content['title'] = page.title
+      if (page.seo?.metaTitle) content['seo.metaTitle'] = page.seo.metaTitle
+      if (page.seo?.metaDescription) content['seo.metaDescription'] = page.seo.metaDescription
+
+      // ── 2. Collect block strings ──────────────────────────────────────────
+      const blockStringKeys: Array<{ blockIndex: number; path: string; contentKey: string }> = []
+
+      if (page.dbLayout && page.dbLayout.length > 0) {
+        page.dbLayout.forEach((block, blockIndex) => {
+          if (typeof block === 'object' && block !== null) {
+            const blockData = (block as { data?: Record<string, unknown> }).data
+            if (blockData) {
+              const strings = extractAllStrings(blockData)
+              strings.forEach(({ path, value }) => {
+                if (value.trim().length > 1) {
+                  const contentKey = `__block_${blockIndex}__${path}`
+                  content[contentKey] = value
+                  blockStringKeys.push({ blockIndex, path, contentKey })
+                }
+              })
+            }
+          }
+        })
+      }
+
+      if (Object.keys(content).length === 0) {
+        throw new Error('No translatable content found in the source page.')
+      }
+
+      // ── 3. Call AI translate API ──────────────────────────────────────────
+      console.log('[AI Translate] Sending:', { sourceLocale: defaultLocale.code, targetLocale: targetLocaleCode, stringCount: Object.keys(content).length, contentSample: Object.entries(content).slice(0, 3) })
+      const res = await fetch('/api/admin/ai-translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          sourceLocale: defaultLocale.code,
+          targetLocale: targetLocaleCode,
+          content,
+        }),
+      })
+
+      const data = (await res.json()) as {
+        translated?: Record<string, string>
+        error?: string
+        debug?: { sourceLocale: { code: string; name: string }; targetLocale: { code: string; name: string }; stringCount: number }
+      }
+
+      console.log('[AI Translate] Response debug:', data.debug)
+
+      if (!res.ok || !data.translated) {
+        throw new Error(data.error || 'AI translation failed')
+      }
+
+      const { translated } = data
+      console.log('[AI Translate] Translated sample:', Object.entries(translated).slice(0, 5))
+
+      // ── 4 & 5. Build final layout with translated block strings ──────────
+      let newLayout: Array<{ data?: Record<string, unknown> }> | null = null
+
+      if (blockStringKeys.length > 0) {
+        const currentLayout = dbLayoutValueRef.current
+        newLayout = JSON.parse(
+          JSON.stringify(currentLayout && currentLayout.length > 0 ? currentLayout : page.dbLayout),
+        ) as Array<{ data?: Record<string, unknown> }>
+
+        blockStringKeys.forEach(({ blockIndex, path, contentKey }) => {
+          const translatedValue = translated[contentKey]
+          if (!translatedValue || !newLayout) return
+
+          while (newLayout.length <= blockIndex) {
+            newLayout.push({ data: {} })
+          }
+          if (!newLayout[blockIndex].data) {
+            newLayout[blockIndex] = { ...newLayout[blockIndex], data: {} }
+          }
+          setValueByPath(newLayout[blockIndex].data, path, translatedValue)
+        })
+      }
+
+      const fieldCount = Object.keys(translated).filter((k) => translated[k]).length
+      const src = data.debug?.sourceLocale?.name ?? defaultLocale.name
+      const tgt = data.debug?.targetLocale?.name ?? targetLocaleCode
+      setAiSuccess(
+        `AI translated ${fieldCount} field${fieldCount !== 1 ? 's' : ''} from ${src} → ${tgt}. Review and save to publish.`,
+      )
+      setTimeout(() => setAiSuccess(null), 8000)
+
+      // Defer all setValue calls after React flushes the aiTranslating=false
+      // re-render. Use stable refs so we always call the latest setValue binding
+      // regardless of how many re-renders happen before the timeout fires.
+      const capturedLayout = newLayout
+      const capturedTranslated = translated
+      setTimeout(() => {
+        if (capturedTranslated['title']) titleSetValueRef.current(capturedTranslated['title'])
+        if (capturedTranslated['seo.metaTitle']) metaTitleSetValueRef.current(capturedTranslated['seo.metaTitle'])
+        if (capturedTranslated['seo.metaDescription']) metaDescSetValueRef.current(capturedTranslated['seo.metaDescription'])
+        if (capturedLayout) dbLayoutSetValueRef.current(capturedLayout)
+      }, 50)
+
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : 'AI translation failed')
+    } finally {
+      setAiTranslating(false)
+    }
+  }, [reference, currentLocale])
 
   const doCopyBlocks = useCallback(async () => {
     if (!pageId) return
@@ -485,6 +634,71 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
           </div>
         )}
 
+        {/* AI Translate Section */}
+        <div
+          style={{
+            marginTop: 16,
+            paddingTop: 16,
+            borderTop: '1px solid var(--theme-border-color)',
+          }}
+        >
+          <div
+            style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              color: 'var(--theme-elevation-400)',
+              marginBottom: 6,
+            }}
+          >
+            AI Translation
+          </div>
+          <p
+            style={{
+              fontSize: '12px',
+              color: 'var(--theme-elevation-500)',
+              margin: '0 0 10px',
+              lineHeight: 1.4,
+            }}
+          >
+            Generate draft translations for title, SEO, and block content using Gemini AI. Review before saving.
+          </p>
+
+          <AdminButton
+            type="button"
+            onClick={doAiTranslate}
+            disabled={aiTranslating}
+            tone="primary"
+            style={{ width: '100%', fontSize: '13px' }}
+          >
+            {aiTranslating ? 'Translating…' : '✨ Translate with AI'}
+          </AdminButton>
+
+          {aiError && (
+            <p
+              style={{
+                marginTop: 8,
+                fontSize: '12px',
+                color: 'var(--theme-error-500)',
+              }}
+            >
+              ✗ {aiError}
+            </p>
+          )}
+
+          {aiSuccess && (
+            <p
+              style={{
+                marginTop: 8,
+                fontSize: '12px',
+                color: 'var(--theme-success-500)',
+              }}
+            >
+              ✓ {aiSuccess}
+            </p>
+          )}
+        </div>
+
         {/* Info */}
         <p
           style={{
@@ -672,7 +886,7 @@ function extractAllStrings(
     result.push({ path: prefix, value: obj })
   } else if (Array.isArray(obj)) {
     obj.forEach((item, index) => {
-      extractAllStrings(item, prefix ? `${prefix}.${index}` : String(index), result)
+      extractAllStrings(item, prefix ? `${prefix} › ${index}` : String(index), result)
     })
   } else if (typeof obj === 'object' && obj !== null) {
     for (const [key, value] of Object.entries(obj)) {
@@ -689,7 +903,11 @@ function getValueByPath(obj: unknown, path: string): string {
   for (const key of keys) {
     if (current === null || current === undefined) return ''
     if (typeof current !== 'object') return ''
-    current = (current as Record<string, unknown>)[key]
+    if (Array.isArray(current)) {
+      current = (current as unknown[])[parseInt(key, 10)]
+    } else {
+      current = (current as Record<string, unknown>)[key]
+    }
   }
   return typeof current === 'string' ? current : ''
 }
@@ -700,11 +918,20 @@ function setValueByPath(obj: unknown, path: string, value: string): boolean {
   for (let i = 0; i < keys.length - 1; i++) {
     if (current === null || current === undefined) return false
     if (typeof current !== 'object') return false
-    current = (current as Record<string, unknown>)[keys[i]]
+    const key = keys[i]
+    if (Array.isArray(current)) {
+      current = (current as unknown[])[parseInt(key, 10)]
+    } else {
+      current = (current as Record<string, unknown>)[key]
+    }
   }
   const lastKey = keys[keys.length - 1]
   if (current && typeof current === 'object') {
-    ;(current as Record<string, unknown>)[lastKey] = value
+    if (Array.isArray(current)) {
+      ;(current as unknown[])[parseInt(lastKey, 10)] = value
+    } else {
+      ;(current as Record<string, unknown>)[lastKey] = value
+    }
     return true
   }
   return false

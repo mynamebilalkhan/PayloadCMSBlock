@@ -26,14 +26,17 @@ export async function POST(req: NextRequest) {
     }
 
     const body = (await req.json()) as {
-      sourceLocale?: string
-      targetLocale?: string
+      sourceLocale?: string | number
+      targetLocale?: string | number
       content?: Record<string, string>
     }
 
-    const { sourceLocale, targetLocale, content } = body
+    const { content, sourceLocale, targetLocale } = body
 
-    if (!sourceLocale || !targetLocale) {
+    if (
+      sourceLocale === undefined || sourceLocale === null || sourceLocale === '' ||
+      targetLocale === undefined || targetLocale === null || targetLocale === ''
+    ) {
       return NextResponse.json(
         { error: 'sourceLocale and targetLocale are required' },
         { status: 400 },
@@ -49,7 +52,54 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'GEMINI_API_KEY is not configured' }, { status: 500 })
     }
 
-    if (sourceLocale === targetLocale) {
+    // ── Resolve locale codes + names ─────────────────────────────────────────
+    const resolveLocale = async (
+      value: string | number,
+    ): Promise<{ code: string; name: string }> => {
+      const isId =
+        typeof value === 'number' ||
+        (typeof value === 'string' && /^\d+$/.test(value))
+
+      if (isId) {
+        const doc = await payload.findByID({
+          collection: 'locales',
+          id: typeof value === 'number' ? value : parseInt(value, 10),
+          depth: 0,
+        })
+        const d = doc as unknown as { code?: string; name?: string }
+        if (!d.code) throw new Error(`Locale ID ${value} has no code`)
+        return { code: d.code, name: d.name ?? d.code }
+      }
+
+      // It's already a code string — look up the name from DB
+      const result = await payload.find({
+        collection: 'locales',
+        where: { code: { equals: String(value) } },
+        limit: 1,
+        depth: 0,
+      })
+      const doc = result.docs[0] as unknown as { code?: string; name?: string } | undefined
+      return { code: String(value), name: doc?.name ?? String(value) }
+    }
+
+    let resolvedSource: { code: string; name: string }
+    let resolvedTarget: { code: string; name: string }
+
+    try {
+      ;[resolvedSource, resolvedTarget] = await Promise.all([
+        resolveLocale(sourceLocale),
+        resolveLocale(targetLocale),
+      ])
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to resolve locales'
+      return NextResponse.json({ error: msg }, { status: 400 })
+    }
+
+    console.log(
+      `[ai-translate] ${resolvedSource.code} (${resolvedSource.name}) → ${resolvedTarget.code} (${resolvedTarget.name}) | ${Object.keys(content).length} strings`,
+    )
+
+    if (resolvedSource.code === resolvedTarget.code) {
       return NextResponse.json({ translated: content })
     }
 
@@ -60,39 +110,11 @@ export async function POST(req: NextRequest) {
       inputMap[k] = content[k]
     })
 
-    const prompt = buildPrompt(sourceLocale, targetLocale, inputMap)
+    const prompt = buildPrompt(resolvedSource, resolvedTarget, inputMap)
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.2,
-            responseMimeType: 'application/json',
-          },
-        }),
-      },
-    )
+    const rawText = await callGeminiWithRetry(prompt, apiKey)
+    console.log(`[ai-translate] Raw Gemini response (first 500 chars):`, rawText.slice(0, 500))
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text()
-      console.error('[ai-translate] Gemini API error:', errText)
-      return NextResponse.json(
-        { error: `Gemini API returned ${geminiRes.status}` },
-        { status: 502 },
-      )
-    }
-
-    const geminiData = (await geminiRes.json()) as {
-      candidates?: Array<{
-        content?: { parts?: Array<{ text?: string }> }
-      }>
-    }
-
-    const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
     const translated = safeParseTranslations(rawText, keys)
 
     if (!translated) {
@@ -103,7 +125,14 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    return NextResponse.json({ translated })
+    return NextResponse.json({
+      translated,
+      debug: {
+        sourceLocale: resolvedSource,
+        targetLocale: resolvedTarget,
+        stringCount: keys.length,
+      },
+    })
   } catch (err) {
     console.error('[ai-translate]', err)
     const message = err instanceof Error ? err.message : 'Internal server error'
@@ -114,23 +143,73 @@ export async function POST(req: NextRequest) {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function buildPrompt(
-  sourceLocale: string,
-  targetLocale: string,
+  source: { code: string; name: string },
+  target: { code: string; name: string },
   content: Record<string, string>,
 ): string {
   const contentJson = JSON.stringify(content, null, 2)
-  return `You are a professional translator. Translate the values in the following JSON object from "${sourceLocale}" to "${targetLocale}".
+  return `Translate the following JSON values from ${source.name} to ${target.name}.
+
+IMPORTANT: Every value in the output MUST be written in ${target.name}. This is a translation task — do NOT copy the source text.
 
 Rules:
-- Translate only the VALUES, not the keys.
-- Preserve all formatting, HTML tags, punctuation, and whitespace exactly as-is.
-- Do not translate URLs, email addresses, code snippets, proper nouns that should stay in source, or values that are already in the target language.
-- Return ONLY a valid JSON object with the same keys and translated values. No markdown, no code fences, no extra text.
+1. Keep every JSON key exactly as-is.
+2. Replace every JSON value with its ${target.name} translation.
+3. Preserve HTML tags, URLs, email addresses, and file paths verbatim.
+4. Output ONLY the JSON object. No markdown, no explanation, no extra text.
 
-Input:
+Input (${source.name}):
 ${contentJson}
 
-Output (JSON only):`
+Output (${target.name}):`
+}
+
+// ─── Gemini HTTP caller with retry ───────────────────────────────────────────
+
+const GEMINI_URL =
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
+
+async function callGeminiWithRetry(
+  prompt: string,
+  apiKey: string,
+  maxAttempts = 3,
+): Promise<string> {
+  const body = JSON.stringify({
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+  })
+
+  let lastError = ''
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+    })
+
+    if (res.ok) {
+      const data = (await res.json()) as {
+        candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+      }
+      return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+    }
+
+    lastError = `${res.status}`
+    const isRetryable = res.status === 429 || res.status === 500 || res.status === 503
+
+    if (!isRetryable || attempt === maxAttempts) {
+      const errText = await res.text().catch(() => '')
+      console.error(`[ai-translate] Gemini ${res.status} (attempt ${attempt}):`, errText.slice(0, 300))
+      throw new Error(`Gemini API returned ${res.status}`)
+    }
+
+    const delayMs = 1000 * Math.pow(2, attempt - 1) // 1s, 2s
+    console.warn(`[ai-translate] Gemini ${res.status} — retrying in ${delayMs}ms (attempt ${attempt}/${maxAttempts})`)
+    await new Promise((r) => setTimeout(r, delayMs))
+  }
+
+  throw new Error(`Gemini API returned ${lastError} after ${maxAttempts} attempts`)
 }
 
 /**
