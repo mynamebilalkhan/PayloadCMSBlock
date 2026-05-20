@@ -1,17 +1,53 @@
-# Architecture: PayloadCMS App
+# Architecture: PayloadCMS Multilingual Website Platform
 
-## Overview
+## What This Project Is
 
-A Payload CMS 3.76 + Next.js 15 App Router project for managing site pages with a dynamic block architecture. The codebase has two page-authoring paths:
+A **professional multilingual website content management system** built on Payload CMS 3.76 + Next.js 15. It empowers content teams to create, manage, and publish localized websites with a powerful visual page builder.
 
-- A **runtime versioned block system** where block schemas live in the database. Pages store block instances that pin to immutable schema versions, so schema changes do not break existing content.
-- A **Payload-native page authoring path** in `Pages.ts` that adds a `hero` group and a Payload `blocks` field for configured blocks such as `Testimonials`.
+### Core Purpose
 
-Both paths are rendered by the frontend route. The runtime block system has been extended with four features: conditional field logic, advanced validation rules, visual UI metadata (tabbed/grid admin layout), and nested/composable blocks. The admin panel supports **Live Preview** — an embedded iframe that re-renders the frontend on every document save so editors can preview draft content in real time.
+This platform enables organizations to:
+- **Build pages visually** using reusable, versioned content blocks (Hero, Features, Testimonials, Pricing, FAQ, etc.)
+- **Manage multiple languages** with a streamlined translation workflow
+- **Preserve content integrity** through immutable schema versioning — changes never break existing pages
+- **Preview changes live** before publishing
 
-The site is **multilingual**: enabled languages live in the **`locales`** collection; middleware and `[locale]` routing resolve URL prefixes; each **page** belongs to one locale and links to sibling translations via **`translationGroupId`**. Editors duplicate pages into other locales with **Translate to…** in the admin sidebar. The frontend shell (header, footer) is configured per locale via **`header-locales`** / **`footer-locales`** collections; the **theme** global is shared across all locales.
+### Who Uses This
 
-A **visual block builder** is embedded at `/block-builder` (same port, no separate process). It provides a drag-and-drop GUI for designing block schemas and publishing them directly to the database. Existing blocks can be loaded back into the builder from the Payload admin via the "Edit in Block Builder" button, enabling a full re-versioning round-trip.
+- **Content editors** build pages by dragging and dropping pre-designed blocks
+- **Translators** work in a dedicated translation interface with side-by-side source reference
+- **Developers** extend the system by creating new block types in code or the visual builder
+- **Marketing teams** manage SEO metadata and publish to multiple locales
+
+## Key Capabilities
+
+| Feature | Description |
+|---------|-------------|
+| **Visual Page Builder** | Assemble pages from 8+ pre-built block types (Hero, Features, Testimonials, Pricing, FAQ, CTA, Card Grid, Rich Text) |
+| **Block Versioning** | Every block schema change creates a new immutable version; existing pages continue using their pinned version |
+| **Multilingual Support** | Full i18n with translation groups linking page variants across locales; RTL language support |
+| **Translation Interface** | Side-by-side translation panel in admin: view source locale text and enter translations directly |
+| **Live Preview** | See frontend render update instantly as you edit content |
+| **Visual Block Builder** | Design new block schemas via drag-and-drop GUI at `/block-builder`, no coding required |
+| **SEO Built-in** | Meta titles, descriptions, OpenGraph images, and no-index controls per page |
+| **Media Management** | Image uploads with automatic resizing (thumbnail, card, tablet sizes) |
+
+## Technical Architecture Overview
+
+The codebase has **two complementary page-authoring paths**:
+
+1. **Runtime Versioned Block System** (Primary)
+   - Block schemas stored in database (`block-definitions` + `block-definition-versions`)
+   - Pages store block instances pinned to specific schema versions
+   - Changes to block definitions create new versions without breaking existing content
+   - Supports advanced features: conditional fields, validation rules, tabbed layouts, nested blocks
+
+2. **Payload-Native Blocks** (Secondary)
+   - Traditional Payload CMS blocks field for simpler content sections
+   - Currently includes `Testimonials` block
+   - Stored in `contentBlocks` array on pages
+
+Both systems render through the Next.js frontend at `[locale]/[[...slug]]` routes.
 
 **Stack:**
 - Backend: Payload CMS 3.76.0 with PostgreSQL adapter
@@ -85,6 +121,7 @@ Page metadata plus authoring fields for both the runtime block system and the ne
 | `translationGroupId` | text (read-only) | UUID shared by all variants; auto-generated on create if missing |
 | `translationStatus` | ui | Custom component: lists enabled locales and translation coverage |
 | `duplicateForLocale` | ui | Custom component: **Translate to…** modal to create a draft copy in another locale |
+| `translationReference` | ui | Custom component: **Translation Reference Panel** — side-by-side source/translation interface for in-page translation |
 
 **SEO group:** `seo.metaTitle`, `seo.metaDescription`, `seo.ogImage` (upload), `seo.noIndex`
 
@@ -200,6 +237,33 @@ sequenceDiagram
 | Create | `status: 'draft'`, `locale: targetLocale.id` (numeric), copy `title`, `seo`, `dbLayout`, `contentBlocks` |
 
 **API:** `POST /api/admin/duplicate-page-locale` — see [API Routes](#post-apiadminduplicate-page-locale).
+
+---
+
+### Translation Reference Panel (In-Page Translation UI)
+
+**File:** `src/components/admin/TranslationReferencePanel.tsx`
+
+A sidebar interface in the admin panel that enables **side-by-side translation** while editing a page. When viewing a non-default locale page, translators see source content from the default locale and can enter translations directly.
+
+**Features:**
+
+| Feature | Description |
+|---------|-------------|
+| **Source Reference** | Shows title, slug, meta title, meta description from default locale page |
+| **Copy Button** | One-click copy source text to clipboard for reference |
+| **Block Translation** | Extracts all translatable strings from page builder blocks (dbLayout) with editable inputs |
+| **Direct Editing** | Changes sync with the main form — no separate save step needed |
+| **Copy Blocks from Source** | Button to copy entire block structure from default locale with confirmation dialog |
+
+**Copy Blocks Flow:**
+1. User clicks "Copy Blocks from Source"
+2. Confirmation dialog warns about replacing existing translations
+3. API fetches blocks with `dryRun: true` (no auto-save)
+4. UI updates form state via `setValue()`
+5. User manually saves page to persist changes
+
+**API:** `POST /api/admin/copy-blocks-from-default` — returns block data for dry-run or saves directly.
 
 ---
 
@@ -1100,6 +1164,46 @@ Delegates to `duplicatePageForLocale()` in `src/lib/admin/duplicatePageForLocale
 
 ---
 
+### `POST /api/admin/copy-blocks-from-default`
+**File:** `src/app/api/admin/copy-blocks-from-default/route.ts`
+
+Copies `dbLayout` and `contentBlocks` from the default locale sibling to the current page. Used by the Translation Reference Panel to import block structure when starting a translation.
+
+```ts
+// Request
+{ pageId: string | number, dryRun?: boolean }
+
+// Success (200) — dryRun: true
+{
+  success: true,
+  dryRun: true,
+  blocks: {
+    dbLayout: Array<{ blockDefinition, blockVersion, data, instanceId, ... }>,
+    contentBlocks: unknown[]
+  },
+  copied: { dbLayoutCount: number, contentBlocksCount: number }
+}
+
+// Success (200) — dryRun: false (or omitted)
+{
+  success: true,
+  copied: { dbLayoutCount: number, contentBlocksCount: number }
+}
+
+// Errors
+401 Unauthorized
+400 Missing pageId / no translationGroupId / already default locale
+404 Source page or default locale sibling not found
+```
+
+**Key behaviors:**
+- When `dryRun: true`, returns block data without saving — UI updates form state via `setValue()`
+- When `dryRun: false`, saves directly to database (legacy behavior)
+- Generates new `instanceId` for each copied block to avoid conflicts
+- Sanitizes block data via `normalizeBlockData()`
+
+---
+
 ### Payload REST API
 **File:** `src/app/(payload)/api/[...slug]/route.ts`
 
@@ -1217,6 +1321,44 @@ Sidebar **Translate to…** button (`id="translate-to-locale-btn"`). Modal loads
 - **Available** — radio selection for new translation
 
 POSTs to `/api/admin/duplicate-page-locale` with numeric `targetLocaleId` when possible. On 409, redirects to `existingId`.
+
+---
+
+### TranslationReferencePanel
+**File:** `src/components/admin/TranslationReferencePanel.tsx`
+
+Sidebar `ui` field on `pages` that provides **in-page translation workflow**. Shows when editing a non-default locale page that has a `translationGroupId`.
+
+**Features:**
+
+| Feature | How it works |
+|---------|--------------|
+| **Source Content** | Fetches default locale sibling via `GET /api/admin/page-sibling?translationGroupId={id}` |
+| **Page Fields** | Shows source title, slug, meta title, meta description with copy buttons and translation inputs |
+| **Block Translation** | Recursively extracts all string fields from `dbLayout` blocks; displays source text + editable inputs for each |
+| **String Extraction** | Uses `extractAllStrings()` to find translatable content at any nesting level (objects, arrays) |
+| **Form Sync** | Uses Payload `useField({ path: 'dbLayout' })` — changes sync bidirectionally with main form |
+| **Copy Blocks** | Button to copy entire block structure from default locale with confirmation dialog and dry-run API |
+
+**Copy Blocks Flow:**
+```
+User clicks "Copy Blocks from Source"
+    → Confirmation dialog (warns about translation loss)
+    → POST /api/admin/copy-blocks-from-default (dryRun: true)
+    → UI updates dbLayout via setValue()
+    → User manually saves to persist
+```
+
+**Helper Functions:**
+- `extractAllStrings(obj, prefix, result)` — recursively extracts translatable strings, filtering out IDs/URLs/short text
+- `getValueByPath(obj, path)` — reads nested values using " › " delimiter
+- `setValueByPath(obj, path, value)` — writes nested values for form updates
+
+**BlockTranslationSection Component:**
+Renders translation rows for each block string. Shows first 6 fields with "Show More/Show Less" toggle. Each row shows:
+- Block number + field path label (e.g., "Block 1 › heading › title")
+- Source text (read-only, gray background)
+- Translation input (updates target `dbLayout`)
 
 ---
 
@@ -1551,8 +1693,9 @@ payload/
     │
     ├── components/
     │   ├── admin/
-    │   │   ├── TranslationStatus.tsx    # Sidebar translation coverage list
-    │   │   └── DuplicateForLocale.tsx   # Translate to… modal
+    │   │   ├── TranslationStatus.tsx      # Sidebar translation coverage list
+    │   │   ├── DuplicateForLocale.tsx     # Translate to… modal
+    │   │   └── TranslationReferencePanel.tsx  # Side-by-side translation interface
     │   ├── LivePreviewListener.tsx      # 'use client' wrapper for RefreshRouteOnSave
     │   ├── EditInBuilderButton/
     │   │   └── index.tsx                # Payload admin ui field — link to /block-builder?load=<slug>
