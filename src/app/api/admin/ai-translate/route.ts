@@ -110,20 +110,13 @@ export async function POST(req: NextRequest) {
       inputMap[k] = content[k]
     })
 
-    const prompt = buildPrompt(resolvedSource, resolvedTarget, inputMap)
-
-    const rawText = await callGeminiWithRetry(prompt, apiKey)
-    console.log(`[ai-translate] Raw Gemini response (first 500 chars):`, rawText.slice(0, 500))
-
-    const translated = safeParseTranslations(rawText, keys)
-
-    if (!translated) {
-      console.error('[ai-translate] Failed to parse Gemini response:', rawText)
-      return NextResponse.json(
-        { error: 'AI returned an unparseable response. Please retry.' },
-        { status: 502 },
-      )
-    }
+    const translated = await translateContentInBatches(
+      resolvedSource,
+      resolvedTarget,
+      inputMap,
+      keys,
+      apiKey,
+    )
 
     return NextResponse.json({
       translated,
@@ -135,6 +128,9 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     console.error('[ai-translate]', err)
+    if (err instanceof GeminiApiError) {
+      return NextResponse.json({ error: err.message }, { status: err.statusCode })
+    }
     const message = err instanceof Error ? err.message : 'Internal server error'
     return NextResponse.json({ error: message }, { status: 500 })
   }
@@ -164,22 +160,129 @@ ${contentJson}
 Output (${target.name}):`
 }
 
+// ─── Batching (reduces rate-limit spikes on large pages) ─────────────────────
+
+/** Max strings per Gemini request; smaller batches lower 429 risk. */
+const TRANSLATE_BATCH_SIZE = 8
+/** Pause between batch requests (ms). */
+const TRANSLATE_BATCH_DELAY_MS = 3000
+
+class GeminiApiError extends Error {
+  statusCode: number
+
+  constructor(message: string, statusCode: number) {
+    super(message)
+    this.name = 'GeminiApiError'
+    this.statusCode = statusCode
+  }
+}
+
+async function translateContentInBatches(
+  source: { code: string; name: string },
+  target: { code: string; name: string },
+  content: Record<string, string>,
+  keys: string[],
+  apiKey: string,
+): Promise<Record<string, string>> {
+  const translated: Record<string, string> = {}
+  const batchCount = Math.ceil(keys.length / TRANSLATE_BATCH_SIZE)
+
+  for (let i = 0; i < keys.length; i += TRANSLATE_BATCH_SIZE) {
+    const batchIndex = Math.floor(i / TRANSLATE_BATCH_SIZE) + 1
+    const batchKeys = keys.slice(i, i + TRANSLATE_BATCH_SIZE)
+    const batchMap: Record<string, string> = {}
+    for (const k of batchKeys) {
+      batchMap[k] = content[k]
+    }
+
+    if (batchCount > 1) {
+      console.log(`[ai-translate] Batch ${batchIndex}/${batchCount} (${batchKeys.length} strings)`)
+    }
+
+    const prompt = buildPrompt(source, target, batchMap)
+    try {
+      const rawText = await callGeminiWithRetry(prompt, apiKey)
+      const batchResult = safeParseTranslations(rawText, batchKeys)
+
+      if (!batchResult) {
+        console.error('[ai-translate] Failed to parse Gemini response:', rawText.slice(0, 500))
+        throw new GeminiApiError('AI returned an unparseable response. Please retry.', 502)
+      }
+
+      Object.assign(translated, batchResult)
+    } catch (err) {
+      // If Gemini signals rate-limit/quota (429), return partial translations collected so far.
+      if (err instanceof GeminiApiError && err.statusCode === 429) {
+        console.warn('[ai-translate] Rate limit reached — returning partial translations')
+        return translated
+      }
+      // Re-throw other errors to be handled by caller
+      throw err
+    }
+
+    if (i + TRANSLATE_BATCH_SIZE < keys.length) {
+      await sleep(TRANSLATE_BATCH_DELAY_MS)
+    }
+  }
+
+  return translated
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 // ─── Gemini HTTP caller with retry ───────────────────────────────────────────
 
 const GEMINI_URL =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
 
+function geminiErrorMessage(status: number, errText: string): string {
+  if (status === 429) {
+    const quotaExhausted = /quota|exhausted|RESOURCE_EXHAUSTED|rate.?limit/i.test(errText)
+    if (quotaExhausted) {
+      return (
+        'Gemini API quota or rate limit reached. Wait a few minutes and try again, ' +
+        'or check usage and billing at https://ai.google.dev/rate-limit.'
+      )
+    }
+    return 'Too many translation requests. Please wait a minute and try again.'
+  }
+  if (status === 401 || status === 403) {
+    return 'Gemini API key is invalid or does not have permission. Check GEMINI_API_KEY.'
+  }
+  if (status === 400) {
+    return 'Gemini rejected the request. The page may have too much content to translate at once.'
+  }
+  return `Gemini API error (${status}). Please try again later.`
+}
+
+function retryDelayMs(status: number, attempt: number, retryAfterHeader: string | null): number {
+  if (retryAfterHeader) {
+    const seconds = parseInt(retryAfterHeader, 10)
+    if (!Number.isNaN(seconds) && seconds > 0) {
+      return Math.min(seconds * 1000, 120_000)
+    }
+  }
+  if (status === 429) {
+    // 5s, 15s, 45s — quota limits need longer backoff than 1s/2s
+    return 5000 * Math.pow(3, attempt - 1)
+  }
+  return 1000 * Math.pow(2, attempt - 1)
+}
+
 async function callGeminiWithRetry(
   prompt: string,
   apiKey: string,
-  maxAttempts = 3,
+  maxAttempts = 4,
 ): Promise<string> {
   const body = JSON.stringify({
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
   })
 
-  let lastError = ''
+  let lastStatus = 0
+  let lastErrText = ''
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
@@ -195,21 +298,32 @@ async function callGeminiWithRetry(
       return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
     }
 
-    lastError = `${res.status}`
+    lastStatus = res.status
+    lastErrText = await res.text().catch(() => '')
     const isRetryable = res.status === 429 || res.status === 500 || res.status === 503
 
     if (!isRetryable || attempt === maxAttempts) {
-      const errText = await res.text().catch(() => '')
-      console.error(`[ai-translate] Gemini ${res.status} (attempt ${attempt}):`, errText.slice(0, 300))
-      throw new Error(`Gemini API returned ${res.status}`)
+      console.error(
+        `[ai-translate] Gemini ${res.status} (attempt ${attempt}/${maxAttempts}):`,
+        lastErrText.slice(0, 400),
+      )
+      throw new GeminiApiError(
+        geminiErrorMessage(res.status, lastErrText),
+        res.status === 429 ? 429 : res.status >= 500 ? 502 : res.status,
+      )
     }
 
-    const delayMs = 1000 * Math.pow(2, attempt - 1) // 1s, 2s
-    console.warn(`[ai-translate] Gemini ${res.status} — retrying in ${delayMs}ms (attempt ${attempt}/${maxAttempts})`)
-    await new Promise((r) => setTimeout(r, delayMs))
+    const delayMs = retryDelayMs(res.status, attempt, res.headers.get('Retry-After'))
+    console.warn(
+      `[ai-translate] Gemini ${res.status} — retrying in ${delayMs}ms (attempt ${attempt}/${maxAttempts})`,
+    )
+    await sleep(delayMs)
   }
 
-  throw new Error(`Gemini API returned ${lastError} after ${maxAttempts} attempts`)
+  throw new GeminiApiError(
+    geminiErrorMessage(lastStatus, lastErrText),
+    lastStatus === 429 ? 429 : 502,
+  )
 }
 
 /**

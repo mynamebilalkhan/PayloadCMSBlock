@@ -7,6 +7,8 @@ import type { UIFieldClientProps } from 'payload'
 import { ClientOnlyAdminField } from '@/components/admin/ClientOnlyAdminField'
 import { AdminButton } from '@/components/admin/AdminUI'
 import { useDocumentInfo } from '@payloadcms/ui'
+import { normalizeBlockData } from '@/lib/blockData/normalizeBlockData'
+import { coerceRelationshipId } from '@/lib/payload/coerceRelationshipId'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,7 +66,6 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
   const [reference, setReference] = useState<SiblingResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [expandedBlocks, setExpandedBlocks] = useState<Set<number>>(new Set())
   const [copyingBlocks, setCopyingBlocks] = useState(false)
   const [copySuccess, setCopySuccess] = useState<string | null>(null)
   const [showCopyConfirm, setShowCopyConfirm] = useState(false)
@@ -79,18 +80,16 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
   const metaDescField = useField<string>({ path: 'seo.metaDescription' })
   const dbLayoutField = useField<Array<{ data?: Record<string, unknown> }>>({ path: 'dbLayout' })
 
-  // Stable refs so deferred setTimeout callbacks always call the latest setValue
+  // Stable refs so async callbacks always call the latest setValue
   const titleSetValueRef = useRef(titleField.setValue)
   const metaTitleSetValueRef = useRef(metaTitleField.setValue)
   const metaDescSetValueRef = useRef(metaDescField.setValue)
   const dbLayoutSetValueRef = useRef(dbLayoutField.setValue)
-  const dbLayoutValueRef = useRef(dbLayoutField.value)
 
   useEffect(() => { titleSetValueRef.current = titleField.setValue })
   useEffect(() => { metaTitleSetValueRef.current = metaTitleField.setValue })
   useEffect(() => { metaDescSetValueRef.current = metaDescField.setValue })
   useEffect(() => { dbLayoutSetValueRef.current = dbLayoutField.setValue })
-  useEffect(() => { dbLayoutValueRef.current = dbLayoutField.value })
 
   const fetchReference = useCallback(async () => {
     if (!translationGroupId) return
@@ -205,27 +204,54 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
       const { translated } = data
       console.log('[AI Translate] Translated sample:', Object.entries(translated).slice(0, 5))
 
-      // ── 4 & 5. Build final layout with translated block strings ──────────
-      let newLayout: Array<{ data?: Record<string, unknown> }> | null = null
+      // ── 4 & 5. Apply translations onto layout rows (preserve current form rows when possible).
+      let newLayout: DbLayoutRow[] | null = null
 
-      if (blockStringKeys.length > 0) {
-        const currentLayout = dbLayoutValueRef.current
-        newLayout = JSON.parse(
-          JSON.stringify(currentLayout && currentLayout.length > 0 ? currentLayout : page.dbLayout),
-        ) as Array<{ data?: Record<string, unknown> }>
+      if (blockStringKeys.length > 0 && page.dbLayout) {
+        const sourceBlocks = page.dbLayout as RawBlock[]
+        const currentBlocks = dbLayoutField.value ?? []
 
-        blockStringKeys.forEach(({ blockIndex, path, contentKey }) => {
-          const translatedValue = translated[contentKey]
-          if (!translatedValue || !newLayout) return
-
-          while (newLayout.length <= blockIndex) {
-            newLayout.push({ data: {} })
+        if (currentBlocks.length > 0) {
+          newLayout = currentBlocks.map((row, i) =>
+            normalizeDbLayoutRow(row as DbLayoutRow, sourceBlocks[i]),
+          )
+          while (newLayout.length < sourceBlocks.length) {
+            newLayout.push(mapSourceBlockToRow(sourceBlocks[newLayout.length]))
           }
-          if (!newLayout[blockIndex].data) {
-            newLayout[blockIndex] = { ...newLayout[blockIndex], data: {} }
+        } else {
+          newLayout = sourceBlocks.map(mapSourceBlockToRow)
+        }
+
+        const keysByBlock = new Map<number, typeof blockStringKeys>()
+        for (const entry of blockStringKeys) {
+          const list = keysByBlock.get(entry.blockIndex) ?? []
+          list.push(entry)
+          keysByBlock.set(entry.blockIndex, list)
+        }
+
+        keysByBlock.forEach((keys, blockIndex) => {
+          if (!newLayout || blockIndex >= newLayout.length) return
+
+          const sourceData = normalizeBlockData(sourceBlocks[blockIndex]?.data)
+          const data = JSON.parse(JSON.stringify(sourceData)) as Record<string, unknown>
+
+          for (const { path, contentKey } of keys) {
+            const translatedValue = translated[contentKey]
+            if (translatedValue) setValueByPath(data, path, translatedValue)
           }
-          setValueByPath(newLayout[blockIndex].data, path, translatedValue)
+
+          newLayout[blockIndex] = { ...newLayout[blockIndex], data }
         })
+      }
+
+      // Apply translations before setAiTranslating(false) so Save cannot race ahead.
+      if (translated['title']) titleSetValueRef.current(translated['title'])
+      if (translated['seo.metaTitle']) metaTitleSetValueRef.current(translated['seo.metaTitle'])
+      if (translated['seo.metaDescription']) metaDescSetValueRef.current(translated['seo.metaDescription'])
+      if (newLayout) {
+        dbLayoutSetValueRef.current(
+          newLayout as Array<{ data?: Record<string, unknown> }>,
+        )
       }
 
       const fieldCount = Object.keys(translated).filter((k) => translated[k]).length
@@ -236,24 +262,12 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
       )
       setTimeout(() => setAiSuccess(null), 8000)
 
-      // Defer all setValue calls after React flushes the aiTranslating=false
-      // re-render. Use stable refs so we always call the latest setValue binding
-      // regardless of how many re-renders happen before the timeout fires.
-      const capturedLayout = newLayout
-      const capturedTranslated = translated
-      setTimeout(() => {
-        if (capturedTranslated['title']) titleSetValueRef.current(capturedTranslated['title'])
-        if (capturedTranslated['seo.metaTitle']) metaTitleSetValueRef.current(capturedTranslated['seo.metaTitle'])
-        if (capturedTranslated['seo.metaDescription']) metaDescSetValueRef.current(capturedTranslated['seo.metaDescription'])
-        if (capturedLayout) dbLayoutSetValueRef.current(capturedLayout)
-      }, 50)
-
     } catch (err) {
       setAiError(err instanceof Error ? err.message : 'AI translation failed')
     } finally {
       setAiTranslating(false)
     }
-  }, [reference, currentLocale])
+  }, [reference, currentLocale, dbLayoutField.value])
 
   const doCopyBlocks = useCallback(async () => {
     if (!pageId) return
@@ -426,17 +440,11 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
 
   const { page, defaultLocale } = reference
 
-  const toggleBlock = (index: number) => {
-    setExpandedBlocks((prev) => {
-      const next = new Set(prev)
-      if (next.has(index)) {
-        next.delete(index)
-      } else {
-        next.add(index)
-      }
-      return next
-    })
-  }
+  // Normalize target dbLayout so `data` fields are always objects (not stringified JSON).
+  const normalizedTargetDbLayout: Array<{ data?: Record<string, unknown> }> | undefined =
+    Array.isArray(dbLayoutField.value)
+      ? dbLayoutField.value.map((row: any) => ({ data: normalizeBlockData(row?.data) }))
+      : undefined
 
   return (
     <div className="field-type ui" style={{ marginTop: 16 }}>
@@ -628,7 +636,7 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
             {/* Block Content Translation */}
             <BlockTranslationSection
               sourceDbLayout={reference.page.dbLayout}
-              targetDbLayout={dbLayoutField.value}
+              targetDbLayout={normalizedTargetDbLayout}
               onTargetChange={(newLayout) => dbLayoutField.setValue(newLayout)}
             />
           </div>
@@ -868,6 +876,62 @@ function TranslationRow({
 
 // ─── Helper Functions ────────────────────────────────────────────────────────
 
+type RawBlock = {
+  blockDefinition?: unknown
+  blockVersion?: unknown
+  instanceId?: string
+  label?: string
+  hidden?: boolean
+  anchor?: string
+  data?: unknown
+}
+
+type DbLayoutRow = {
+  blockDefinition?: string | number
+  blockVersion?: string | number
+  instanceId?: string
+  label?: string
+  hidden?: boolean
+  anchor?: string
+  data?: Record<string, unknown>
+}
+
+/** Coerce depth-2 populated relationship objects to plain IDs (matches copy-blocks-from-default). */
+function extractRelId(val: unknown): string | number | undefined {
+  if (val == null || val === '') return undefined
+  if (typeof val === 'number') return val
+  if (typeof val === 'string') return coerceRelationshipId(val)
+  if (typeof val === 'object' && 'id' in (val as Record<string, unknown>)) {
+    const id = (val as { id: unknown }).id
+    if (typeof id === 'number' || typeof id === 'string') return coerceRelationshipId(id)
+  }
+  return undefined
+}
+
+function mapSourceBlockToRow(block: RawBlock): DbLayoutRow {
+  return {
+    blockDefinition: extractRelId(block.blockDefinition),
+    blockVersion: extractRelId(block.blockVersion),
+    instanceId: block.instanceId,
+    label: block.label,
+    hidden: block.hidden ?? false,
+    anchor: block.anchor,
+    data: normalizeBlockData(block.data),
+  }
+}
+
+function normalizeDbLayoutRow(row: DbLayoutRow, sourceBlock?: RawBlock): DbLayoutRow {
+  return {
+    blockDefinition: extractRelId(row.blockDefinition) ?? extractRelId(sourceBlock?.blockDefinition),
+    blockVersion: extractRelId(row.blockVersion) ?? extractRelId(sourceBlock?.blockVersion),
+    instanceId: row.instanceId ?? sourceBlock?.instanceId,
+    label: row.label ?? sourceBlock?.label,
+    hidden: row.hidden ?? sourceBlock?.hidden ?? false,
+    anchor: row.anchor ?? sourceBlock?.anchor,
+    data: normalizeBlockData(row.data),
+  }
+}
+
 function extractAllStrings(
   obj: unknown,
   prefix = '',
@@ -968,10 +1032,13 @@ function BlockTranslationSection({
 
   if (allFields.length === 0) return null
 
+  // Use targetDbLayout directly as the live translation source.
+  const layoutToRead = Array.isArray(targetDbLayout) ? targetDbLayout : []
+
   const displayFields = showAll ? allFields : allFields.slice(0, 6)
 
   const handleFieldChange = (blockIndex: number, path: string, newValue: string) => {
-    const newLayout = [...(targetDbLayout || [])]
+    const newLayout = Array.isArray(layoutToRead) ? [...layoutToRead] : []
     // Ensure block exists
     while (newLayout.length <= blockIndex) {
       newLayout.push({ data: {} })
@@ -1009,8 +1076,13 @@ function BlockTranslationSection({
       </div>
 
       {displayFields.map(({ blockIndex, path, value }) => {
-        const targetBlock = targetDbLayout?.[blockIndex]
-        const targetValue = getValueByPath(targetBlock?.data, path)
+        const targetBlock = Array.isArray(layoutToRead) ? layoutToRead[blockIndex] : undefined
+        const normalizedTargetData = targetBlock?.data ? normalizeBlockData(targetBlock.data) : undefined
+        const rawTargetValue = getValueByPath(normalizedTargetData, path)
+        const targetValue = rawTargetValue !== '' ? rawTargetValue : ''
+
+        const sourceBlock = sourceDbLayout?.[blockIndex] as { data?: Record<string, unknown> }
+        const sourceValue = getValueByPath(sourceBlock?.data, path)
         const label = `Block ${blockIndex + 1} › ${path}`
 
         return (
@@ -1026,24 +1098,21 @@ function BlockTranslationSection({
             >
               {label}
             </div>
-            <div
-              style={{
-                background: 'var(--theme-elevation-100)',
-                border: '1px solid var(--theme-border-color)',
-                borderRadius: 3,
-                padding: '6px 8px',
-                marginBottom: 6,
-                fontSize: '12px',
-                color: 'var(--theme-elevation-600)',
-              }}
-            >
-              {value || '—'}
-            </div>
+            {sourceValue ? (
+              <div
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--theme-elevation-500)',
+                  marginBottom: 6,
+                }}
+              >
+                Source: {sourceValue}
+              </div>
+            ) : null}
             <input
               type="text"
               value={targetValue}
               onChange={(e) => handleFieldChange(blockIndex, path, e.target.value)}
-              placeholder={`Enter translation...`}
               style={{
                 width: '100%',
                 padding: '6px 8px',

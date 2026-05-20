@@ -43,6 +43,7 @@ export function BlockDataField({ path, readOnly }: Props) {
     formDataRef.current = formData
   }, [formData])
 
+  const cleanupTimeoutRef = useRef<number | null>(null)
   const lastCleanedVersionRef = useRef<string | null>(null)
 
   /** Only write back when stripping orphan keys — never when data has not hydrated yet. */
@@ -89,8 +90,9 @@ export function BlockDataField({ path, readOnly }: Props) {
 
         const newSchema = doc.schema as BlockSchema
         setSchema(newSchema)
-
-        applySchemaCleanup(formDataRef.current, newSchema, String(blockVersionId))
+        // Orphan-key cleanup runs in the formData hydration effect below once
+        // block data is in the form. Calling it here races with parent bulk updates
+        // (e.g. AI translate) and can overwrite fresh values with stale formDataRef.
       })
       .catch((err) => {
         if (!cancelled) setError(String(err))
@@ -109,10 +111,27 @@ export function BlockDataField({ path, readOnly }: Props) {
     if (!schema || !blockVersionId) return
     const versionKey = String(blockVersionId)
     if (lastCleanedVersionRef.current === versionKey) return
-    if (Object.keys(formData).length === 0) return
+    if (Object.keys(formDataRef.current).length === 0) return
 
-    applySchemaCleanup(formData, schema, versionKey)
-  }, [formData, schema, blockVersionId, applySchemaCleanup])
+    if (cleanupTimeoutRef.current !== null) {
+      window.clearTimeout(cleanupTimeoutRef.current)
+    }
+
+    cleanupTimeoutRef.current = window.setTimeout(() => {
+      cleanupTimeoutRef.current = null
+      if (lastCleanedVersionRef.current === versionKey) return
+      const current = formDataRef.current
+      if (Object.keys(current).length === 0) return
+      applySchemaCleanup(current, schema, versionKey)
+    }, 150)
+
+    return () => {
+      if (cleanupTimeoutRef.current !== null) {
+        window.clearTimeout(cleanupTimeoutRef.current)
+        cleanupTimeoutRef.current = null
+      }
+    }
+  }, [schema, blockVersionId, applySchemaCleanup])
 
   const handleChange = useCallback(
     (next: Record<string, unknown>) => {
@@ -125,6 +144,8 @@ export function BlockDataField({ path, readOnly }: Props) {
     },
     [schema, setValue],
   )
+
+  if (loading) return
 
   return (
     <div style={{ marginTop: '1rem' }}>
@@ -170,7 +191,8 @@ export function BlockDataField({ path, readOnly }: Props) {
         >
           <SchemaForm
             schema={schema}
-            value={formData}
+            // value={formData}
+            value={formDataFromSlice}
             onChange={handleChange}
             readOnly={readOnly}
           />
