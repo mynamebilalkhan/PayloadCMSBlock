@@ -4,7 +4,6 @@ import React, { useCallback, useState } from 'react'
 import { useDocumentInfo, useFormFields } from '@payloadcms/ui'
 import { useRouter } from 'next/navigation'
 
-import { ClientOnlyAdminField } from '@/components/admin/ClientOnlyAdminField'
 import { AdminButton, adminUIStyles } from '@/components/admin/AdminUI'
 import { relationshipIdsEqual } from '@/lib/payload/coerceRelationshipId'
 
@@ -35,11 +34,7 @@ function serializeTargetLocaleId(id: string | number): string | number {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function DuplicateForLocale() {
-  return (
-    <ClientOnlyAdminField>
-      <DuplicateForLocaleContent />
-    </ClientOnlyAdminField>
-  )
+  return <DuplicateForLocaleContent />
 }
 
 function DuplicateForLocaleContent() {

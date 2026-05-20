@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { useDocumentInfo, useFormFields, useFormModified } from '@payloadcms/ui'
 import type { UIFieldClientProps } from 'payload'
 
-import { ClientOnlyAdminField } from '@/components/admin/ClientOnlyAdminField'
 import { AdminButton, adminUIStyles } from '@/components/admin/AdminUI'
 import {
   buildPageAdminUrl,
@@ -25,29 +24,7 @@ interface TranslationPage extends SiblingPage {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function TranslationStatus(props: UIFieldClientProps) {
-  return (
-    <ClientOnlyAdminField
-      fallback={
-        <div className="field-type ui" style={{ marginTop: 8 }}>
-          <label
-            style={{
-              display: 'block',
-              fontSize: '11px',
-              fontWeight: 600,
-              letterSpacing: '0.02em',
-              textTransform: 'uppercase',
-              color: 'var(--theme-elevation-400)',
-              marginBottom: 8,
-            }}
-          >
-            Translations
-          </label>
-        </div>
-      }
-    >
-      <TranslationStatusContent {...props} />
-    </ClientOnlyAdminField>
-  )
+  return <TranslationStatusContent {...props} />
 }
 
 function TranslationStatusContent(_props: UIFieldClientProps) {

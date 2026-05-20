@@ -63,6 +63,10 @@ export function BlockDataField({ path, readOnly }: Props) {
     [setValue],
   )
 
+  // Stable ref so the effects below never re-run just because setValue changed.
+  const applySchemaCleanupRef = useRef(applySchemaCleanup)
+  useEffect(() => { applySchemaCleanupRef.current = applySchemaCleanup })
+
   useEffect(() => {
     if (!blockVersionId) {
       setSchema(null)
@@ -104,7 +108,7 @@ export function BlockDataField({ path, readOnly }: Props) {
     return () => {
       cancelled = true
     }
-  }, [blockVersionId, applySchemaCleanup])
+  }, [blockVersionId]) // applySchemaCleanup intentionally omitted — accessed via ref
 
   // If block data hydrates after the schema fetch, run orphan-key cleanup once.
   useEffect(() => {
@@ -122,7 +126,7 @@ export function BlockDataField({ path, readOnly }: Props) {
       if (lastCleanedVersionRef.current === versionKey) return
       const current = formDataRef.current
       if (Object.keys(current).length === 0) return
-      applySchemaCleanup(current, schema, versionKey)
+      applySchemaCleanupRef.current(current, schema, versionKey)
     }, 150)
 
     return () => {
@@ -131,7 +135,7 @@ export function BlockDataField({ path, readOnly }: Props) {
         cleanupTimeoutRef.current = null
       }
     }
-  }, [schema, blockVersionId, applySchemaCleanup])
+  }, [schema, blockVersionId]) // applySchemaCleanup intentionally omitted — accessed via ref
 
   const handleChange = useCallback(
     (next: Record<string, unknown>) => {

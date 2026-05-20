@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useFormFields, useField } from '@payloadcms/ui'
 import type { UIFieldClientProps } from 'payload'
 
-import { ClientOnlyAdminField } from '@/components/admin/ClientOnlyAdminField'
 import { AdminButton } from '@/components/admin/AdminUI'
 import { useDocumentInfo } from '@payloadcms/ui'
 import { normalizeBlockData } from '@/lib/blockData/normalizeBlockData'
@@ -46,11 +45,7 @@ interface TranslatableField {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function TranslationReferencePanel(props: UIFieldClientProps) {
-  return (
-    <ClientOnlyAdminField>
-      <TranslationReferencePanelContent {...props} />
-    </ClientOnlyAdminField>
-  )
+  return <TranslationReferencePanelContent {...props} />
 }
 
 function TranslationReferencePanelContent(_props: UIFieldClientProps) {
@@ -62,6 +57,24 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
   const currentLocale = useFormFields(([fields]) =>
     fields.locale?.value as { code?: string } | string | number | undefined
   )
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const formDispatch = useFormFields(([, dispatch]) => dispatch as (action: { type: string; path: string; value: unknown }) => void)
+
+  // Read block data from individual sub-field paths so we always see the live form values.
+  // dbLayoutField.value (the top-level array) is a separate slot in Payload's form state and
+  // does NOT reflect edits made by BlockDataField through its own useField(dbLayout.N.data).
+  const currentBlockData = useFormFields(([fields]) => {
+    const result: Array<{ data: Record<string, unknown> }> = []
+    for (const [key, fieldState] of Object.entries(fields)) {
+      const match = key.match(/^dbLayout\.(\d+)\.data$/)
+      if (match) {
+        const i = parseInt(match[1], 10)
+        while (result.length <= i) result.push({ data: {} })
+        result[i] = { data: normalizeBlockData((fieldState as { value?: unknown })?.value) }
+      }
+    }
+    return result
+  })
 
   const [reference, setReference] = useState<SiblingResponse | null>(null)
   const [loading, setLoading] = useState(false)
@@ -249,9 +262,15 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
       if (translated['seo.metaTitle']) metaTitleSetValueRef.current(translated['seo.metaTitle'])
       if (translated['seo.metaDescription']) metaDescSetValueRef.current(translated['seo.metaDescription'])
       if (newLayout) {
-        dbLayoutSetValueRef.current(
-          newLayout as Array<{ data?: Record<string, unknown> }>,
-        )
+        // Dispatch targeted UPDATE actions per block data field instead of replacing
+        // the whole dbLayout array. Replacing the whole array triggers Payload's row
+        // reconciliation which re-registers every sub-field from the original document
+        // data, causing the translated values to immediately revert to English.
+        newLayout.forEach((row, i) => {
+          if (row.data) {
+            formDispatch({ type: 'UPDATE', path: `dbLayout.${i}.data`, value: row.data })
+          }
+        })
       }
 
       const fieldCount = Object.keys(translated).filter((k) => translated[k]).length
@@ -439,12 +458,6 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
   }
 
   const { page, defaultLocale } = reference
-
-  // Normalize target dbLayout so `data` fields are always objects (not stringified JSON).
-  const normalizedTargetDbLayout: Array<{ data?: Record<string, unknown> }> | undefined =
-    Array.isArray(dbLayoutField.value)
-      ? dbLayoutField.value.map((row: any) => ({ data: normalizeBlockData(row?.data) }))
-      : undefined
 
   return (
     <div className="field-type ui" style={{ marginTop: 16 }}>
@@ -636,8 +649,10 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
             {/* Block Content Translation */}
             <BlockTranslationSection
               sourceDbLayout={reference.page.dbLayout}
-              targetDbLayout={normalizedTargetDbLayout}
-              onTargetChange={(newLayout) => dbLayoutField.setValue(newLayout)}
+              targetDbLayout={currentBlockData}
+              onFieldChange={(blockIndex, updatedData) =>
+                formDispatch({ type: 'UPDATE', path: `dbLayout.${blockIndex}.data`, value: updatedData })
+              }
             />
           </div>
         )}
@@ -1006,11 +1021,11 @@ function setValueByPath(obj: unknown, path: string, value: string): boolean {
 function BlockTranslationSection({
   sourceDbLayout,
   targetDbLayout,
-  onTargetChange,
+  onFieldChange,
 }: {
   sourceDbLayout?: unknown[]
   targetDbLayout?: Array<{ data?: Record<string, unknown> }>
-  onTargetChange: (newLayout: Array<{ data?: Record<string, unknown> }>) => void
+  onFieldChange: (blockIndex: number, updatedData: Record<string, unknown>) => void
 }) {
   const [showAll, setShowAll] = useState(false)
 
@@ -1032,33 +1047,20 @@ function BlockTranslationSection({
 
   if (allFields.length === 0) return null
 
-  // Use targetDbLayout directly as the live translation source.
   const layoutToRead = Array.isArray(targetDbLayout) ? targetDbLayout : []
 
   const displayFields = showAll ? allFields : allFields.slice(0, 6)
 
   const handleFieldChange = (blockIndex: number, path: string, newValue: string) => {
-    const newLayout = Array.isArray(layoutToRead) ? [...layoutToRead] : []
-    // Ensure block exists
-    while (newLayout.length <= blockIndex) {
-      newLayout.push({ data: {} })
-    }
-    // Ensure block has data
-    if (!newLayout[blockIndex].data) {
-      newLayout[blockIndex] = { ...newLayout[blockIndex], data: {} }
-    }
-    // Copy source data if empty
     const sourceBlock = sourceDbLayout[blockIndex] as { data?: Record<string, unknown> }
-    const sourceData = sourceBlock?.data || {}
-    if (Object.keys(newLayout[blockIndex].data!).length === 0) {
-      newLayout[blockIndex] = {
-        ...newLayout[blockIndex],
-        data: JSON.parse(JSON.stringify(sourceData)),
-      }
-    }
-    // Set the new value
-    setValueByPath(newLayout[blockIndex].data, path, newValue)
-    onTargetChange(newLayout)
+    const currentData = layoutToRead[blockIndex]?.data
+    // Use current translated data if present, otherwise seed from source to preserve all fields
+    const base =
+      currentData && Object.keys(currentData).length > 0
+        ? JSON.parse(JSON.stringify(currentData))
+        : JSON.parse(JSON.stringify(sourceBlock?.data || {}))
+    setValueByPath(base, path, newValue)
+    onFieldChange(blockIndex, base)
   }
 
   return (

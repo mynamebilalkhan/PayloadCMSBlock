@@ -10,7 +10,6 @@ import {
   useFormModified,
 } from '@payloadcms/ui'
 
-import { ClientOnlyAdminField } from '@/components/admin/ClientOnlyAdminField'
 import { adminUIStyles } from '@/components/admin/AdminUI'
 import {
   buildPageAdminUrl,
@@ -29,11 +28,7 @@ type RelationshipFieldProps = React.ComponentProps<typeof RelationshipField>
  * (does not retag the current document).
  */
 export function PageLocaleField(props: RelationshipFieldProps) {
-  return (
-    <ClientOnlyAdminField>
-      <PageLocaleFieldContent {...props} />
-    </ClientOnlyAdminField>
-  )
+  return <PageLocaleFieldContent {...props} />
 }
 
 function PageLocaleFieldContent(props: RelationshipFieldProps) {
