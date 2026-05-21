@@ -1,6 +1,8 @@
 /**
  * Strips Payload-internal row `id` fields from array/block data before `create`.
  * Copying them from an existing page causes "Value must be unique" on path `id`.
+ * deepStripRowIds recurses into nested arrays so sub-rows (e.g. items inside a
+ * Testimonials block) are also stripped.
  */
 export function sanitizePageCopyForCreate(source: {
   dbLayout?: unknown
@@ -14,7 +16,7 @@ export function sanitizePageCopyForCreate(source: {
     : source.dbLayout ?? []
 
   const contentBlocks = Array.isArray(source.contentBlocks)
-    ? source.contentBlocks.map((block) => stripRowId(block))
+    ? source.contentBlocks.map((block) => deepStripRowIds(block))
     : source.contentBlocks ?? []
 
   return { dbLayout, contentBlocks }
@@ -24,6 +26,30 @@ function stripRowId(row: unknown): unknown {
   if (!row || typeof row !== 'object' || Array.isArray(row)) return row
   const { id: _removed, ...rest } = row as Record<string, unknown>
   return rest
+}
+
+// Strips `id` from a row and recurses into any nested array values so that
+// sub-rows (e.g. Testimonials > items) have their IDs stripped too.
+function deepStripRowIds(row: unknown): unknown {
+  if (!row || typeof row !== 'object' || Array.isArray(row)) return row
+  const { id: _removed, ...rest } = row as Record<string, unknown>
+  const result: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(rest)) {
+    result[k] = deepStripNestedIds(v)
+  }
+  return result
+}
+
+function deepStripNestedIds(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return value
+  if (Array.isArray(value)) {
+    return value.map((item) => deepStripRowIds(item))
+  }
+  const result: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    result[k] = deepStripNestedIds(v)
+  }
+  return result
 }
 
 export function sampleArrayRowIds(source: {

@@ -48,6 +48,12 @@ interface PendingBlockDataUpdate {
   data: Record<string, unknown>
 }
 
+interface PendingContentBlockUpdate {
+  id: string
+  formPath: string
+  value: string
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function TranslationReferencePanel(props: UIFieldClientProps) {
@@ -79,6 +85,38 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
     return result
   })
 
+  // Read contentBlocks live from the form so newly added blocks appear in the sidebar
+  // without requiring a reference-page fetch.
+  const currentContentBlockData = useFormFields(([fields]) => {
+    const blocks: Array<Record<string, unknown>> = []
+    for (const [key, fieldState] of Object.entries(fields)) {
+      const val = (fieldState as { value?: unknown }).value
+      // top-level field: contentBlocks.N.fieldName
+      const topMatch = key.match(/^contentBlocks\.(\d+)\.([^.]+)$/)
+      if (topMatch) {
+        const bi = parseInt(topMatch[1], 10)
+        const fn = topMatch[2]
+        while (blocks.length <= bi) blocks.push({})
+        blocks[bi][fn] = val
+        continue
+      }
+      // nested array field: contentBlocks.N.arrayField.M.fieldName
+      const nestedMatch = key.match(/^contentBlocks\.(\d+)\.([^.]+)\.(\d+)\.([^.]+)$/)
+      if (nestedMatch) {
+        const bi = parseInt(nestedMatch[1], 10)
+        const af = nestedMatch[2]
+        const ii = parseInt(nestedMatch[3], 10)
+        const fn = nestedMatch[4]
+        while (blocks.length <= bi) blocks.push({})
+        if (!Array.isArray(blocks[bi][af])) blocks[bi][af] = []
+        const arr = blocks[bi][af] as Array<Record<string, unknown>>
+        while (arr.length <= ii) arr.push({})
+        arr[ii][fn] = val
+      }
+    }
+    return blocks
+  })
+
   const [reference, setReference] = useState<SiblingResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -89,6 +127,7 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
   const [aiError, setAiError] = useState<string | null>(null)
   const [aiSuccess, setAiSuccess] = useState<string | null>(null)
   const [pendingBlockDataUpdates, setPendingBlockDataUpdates] = useState<PendingBlockDataUpdate[]>([])
+  const [pendingContentBlockUpdates, setPendingContentBlockUpdates] = useState<PendingContentBlockUpdate[]>([])
 
   // Form field bindings for direct editing
   const titleField = useField<string>({ path: 'title' })
@@ -189,6 +228,24 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
         })
       }
 
+      // ── 2b. Collect content block strings ────────────────────────────────
+      const contentBlockFieldKeys: Array<{ formPath: string; contentKey: string }> = []
+
+      if (page.contentBlocks && page.contentBlocks.length > 0) {
+        page.contentBlocks.forEach((block, blockIndex) => {
+          if (typeof block === 'object' && block !== null) {
+            const fields = extractContentBlockFields(block as Record<string, unknown>, blockIndex)
+            fields.forEach(({ formPath, sourceValue }) => {
+              if (sourceValue.trim().length > 1) {
+                const contentKey = `__cb__${formPath}`
+                content[contentKey] = sourceValue
+                contentBlockFieldKeys.push({ formPath, contentKey })
+              }
+            })
+          }
+        })
+      }
+
       if (Object.keys(content).length === 0) {
         throw new Error('No translatable content found in the source page.')
       }
@@ -277,6 +334,17 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
             )
             .filter((row): row is PendingBlockDataUpdate => Boolean(row)),
         )
+      }
+
+      if (contentBlockFieldKeys.length > 0) {
+        const cbUpdates: PendingContentBlockUpdate[] = []
+        for (const { formPath, contentKey } of contentBlockFieldKeys) {
+          const translatedValue = translated[contentKey]
+          if (translatedValue) {
+            cbUpdates.push({ id: `cb-${Date.now()}-${formPath}`, formPath, value: translatedValue })
+          }
+        }
+        if (cbUpdates.length > 0) setPendingContentBlockUpdates(cbUpdates)
       }
 
       const fieldCount = Object.keys(translated).filter((k) => translated[k]).length
@@ -464,6 +532,14 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
   }
 
   const { page, defaultLocale } = reference
+
+  const sourceLocaleCode = defaultLocale.code
+  const targetLocaleCode =
+    typeof currentLocale === 'object' && currentLocale !== null
+      ? currentLocale.code
+      : currentLocale !== undefined && currentLocale !== null
+        ? String(currentLocale)
+        : undefined
 
   return (
     <div className="field-type ui" style={{ marginTop: 16 }}>
@@ -656,6 +732,16 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
             <BlockTranslationSection
               sourceDbLayout={reference.page.dbLayout}
               targetDbLayout={currentBlockData}
+              sourceLocaleCode={sourceLocaleCode}
+              targetLocaleCode={targetLocaleCode}
+            />
+
+            {/* Content Block Translation */}
+            <ContentBlockTranslationSection
+              sourceContentBlocks={reference.page.contentBlocks}
+              targetContentBlocks={currentContentBlockData}
+              sourceLocaleCode={sourceLocaleCode}
+              targetLocaleCode={targetLocaleCode}
             />
           </div>
         )}
@@ -731,6 +817,16 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
             update={update}
             onApplied={(id) =>
               setPendingBlockDataUpdates((updates) => updates.filter((item) => item.id !== id))
+            }
+          />
+        ))}
+
+        {pendingContentBlockUpdates.map((update) => (
+          <ContentBlockSingleFieldBridge
+            key={update.id}
+            update={update}
+            onApplied={(id) =>
+              setPendingContentBlockUpdates((updates) => updates.filter((item) => item.id !== id))
             }
           />
         ))}
@@ -1051,13 +1147,18 @@ function BlockTranslationInput({
   path,
   sourceDbLayout,
   fallbackTargetData,
+  sourceLocaleCode,
+  targetLocaleCode,
 }: {
   blockIndex: number
   path: string
   sourceDbLayout: unknown[]
   fallbackTargetData?: Record<string, unknown>
+  sourceLocaleCode?: string
+  targetLocaleCode?: string
 }) {
   const { value, setValue } = useField<Record<string, unknown>>({ path: `dbLayout.${blockIndex}.data` })
+  const [translating, setTranslating] = useState(false)
 
   const sourceBlock = sourceDbLayout?.[blockIndex] as { data?: Record<string, unknown> } | undefined
   const normalizedTargetData = normalizeBlockData(value ?? fallbackTargetData)
@@ -1077,18 +1178,51 @@ function BlockTranslationInput({
     setValue(base)
   }
 
+  const valueToTranslate = sourceValue || targetValue
+
+  const handleAiTranslate = async () => {
+    if (!valueToTranslate || !sourceLocaleCode || !targetLocaleCode) return
+    setTranslating(true)
+    try {
+      const result = await aiTranslateSingleField(sourceLocaleCode, targetLocaleCode, valueToTranslate)
+      if (result) handleChange(result)
+    } finally {
+      setTranslating(false)
+    }
+  }
+
   return (
     <div style={{ marginBottom: 12 }}>
-      <div
-        style={{
-          fontSize: '11px',
-          fontWeight: 600,
-          textTransform: 'uppercase',
-          color: 'var(--theme-elevation-400)',
-          marginBottom: 4,
-        }}
-      >
-        {label}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <div
+          style={{
+            fontSize: '11px',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            color: 'var(--theme-elevation-400)',
+          }}
+        >
+          {label}
+        </div>
+        {sourceLocaleCode && targetLocaleCode && valueToTranslate && (
+          <button
+            type="button"
+            onClick={handleAiTranslate}
+            disabled={translating}
+            title="Translate this field with AI"
+            style={{
+              fontSize: '11px',
+              background: 'none',
+              border: 'none',
+              cursor: translating ? 'default' : 'pointer',
+              color: translating ? 'var(--theme-elevation-400)' : 'var(--theme-success-500)',
+              padding: '0 2px',
+              lineHeight: 1,
+            }}
+          >
+            {translating ? '…' : '✨'}
+          </button>
+        )}
       </div>
       {sourceValue ? (
         <div
@@ -1121,36 +1255,322 @@ function BlockTranslationInput({
   )
 }
 
+async function aiTranslateSingleField(
+  sourceLocaleCode: string,
+  targetLocaleCode: string,
+  sourceValue: string,
+): Promise<string | null> {
+  const res = await fetch('/api/admin/ai-translate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({
+      sourceLocale: sourceLocaleCode,
+      targetLocale: targetLocaleCode,
+      content: { field: sourceValue },
+    }),
+  })
+  const data = (await res.json()) as { translated?: Record<string, string>; error?: string }
+  if (!res.ok || !data.translated?.field) return null
+  return data.translated.field
+}
+
+function ContentBlockSingleFieldBridge({
+  update,
+  onApplied,
+}: {
+  update: PendingContentBlockUpdate
+  onApplied: (id: string) => void
+}) {
+  const { setValue } = useField<string>({ path: update.formPath })
+
+  useEffect(() => {
+    setValue(update.value)
+    onApplied(update.id)
+  }, [onApplied, setValue, update])
+
+  return null
+}
+
+// ─── Content Block Helpers ────────────────────────────────────────────────
+
+const SKIP_CONTENT_BLOCK_FIELDS = new Set(['id', 'blockType', 'blockName'])
+
+function extractContentBlockFields(
+  block: Record<string, unknown>,
+  blockIndex: number,
+): { formPath: string; label: string; sourceValue: string; multiline?: boolean }[] {
+  const results: { formPath: string; label: string; sourceValue: string; multiline?: boolean }[] = []
+
+  for (const [key, value] of Object.entries(block)) {
+    if (SKIP_CONTENT_BLOCK_FIELDS.has(key)) continue
+
+    if (typeof value === 'string' && value.trim()) {
+      results.push({
+        formPath: `contentBlocks.${blockIndex}.${key}`,
+        label: `Block ${blockIndex + 1} > ${key.toUpperCase()}`,
+        sourceValue: value,
+      })
+    } else if (Array.isArray(value)) {
+      value.forEach((item, itemIndex) => {
+        if (typeof item !== 'object' || item === null) return
+        for (const [itemKey, itemValue] of Object.entries(item as Record<string, unknown>)) {
+          if (itemKey === 'id') continue
+          if (typeof itemValue === 'string' && itemValue.trim()) {
+            results.push({
+              formPath: `contentBlocks.${blockIndex}.${key}.${itemIndex}.${itemKey}`,
+              label: `Block ${blockIndex + 1} > Item ${itemIndex + 1} > ${itemKey.toUpperCase()}`,
+              sourceValue: itemValue,
+              multiline: itemKey === 'testimonial' || itemValue.length > 80,
+            })
+          }
+        }
+      })
+    }
+  }
+
+  return results
+}
+
+// ─── Content Block Translation Input ─────────────────────────────────────
+
+function ContentBlockTranslationInput({
+  formPath,
+  label,
+  sourceValue,
+  multiline,
+  sourceLocaleCode,
+  targetLocaleCode,
+}: {
+  formPath: string
+  label: string
+  sourceValue: string
+  multiline?: boolean
+  sourceLocaleCode?: string
+  targetLocaleCode?: string
+}) {
+  const { value, setValue } = useField<string>({ path: formPath })
+  const [translating, setTranslating] = useState(false)
+
+  const valueToTranslate = sourceValue || value || ''
+
+  const handleAiTranslate = async () => {
+    if (!valueToTranslate || !sourceLocaleCode || !targetLocaleCode) return
+    setTranslating(true)
+    try {
+      const result = await aiTranslateSingleField(sourceLocaleCode, targetLocaleCode, valueToTranslate)
+      if (result) setValue(result)
+    } finally {
+      setTranslating(false)
+    }
+  }
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <div
+          style={{
+            fontSize: '11px',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            color: 'var(--theme-elevation-400)',
+          }}
+        >
+          {label}
+        </div>
+        {sourceLocaleCode && targetLocaleCode && valueToTranslate && (
+          <button
+            type="button"
+            onClick={handleAiTranslate}
+            disabled={translating}
+            title="Translate this field with AI"
+            style={{
+              fontSize: '11px',
+              background: 'none',
+              border: 'none',
+              cursor: translating ? 'default' : 'pointer',
+              color: translating ? 'var(--theme-elevation-400)' : 'var(--theme-success-500)',
+              padding: '0 2px',
+              lineHeight: 1,
+            }}
+          >
+            {translating ? '…' : '✨'}
+          </button>
+        )}
+      </div>
+      {sourceValue ? (
+        <div style={{ fontSize: '11px', color: 'var(--theme-elevation-500)', marginBottom: 6 }}>
+          Source: {sourceValue}
+        </div>
+      ) : null}
+      {multiline ? (
+        <textarea
+          value={value ?? ''}
+          onChange={(e) => setValue(e.target.value)}
+          rows={3}
+          style={{
+            width: '100%',
+            padding: '6px 8px',
+            fontSize: '13px',
+            fontFamily: 'inherit',
+            border: '1px solid var(--theme-border-color)',
+            borderRadius: 3,
+            background: 'var(--theme-elevation-0)',
+            color: 'var(--theme-text)',
+            outline: 'none',
+            resize: 'vertical',
+          }}
+        />
+      ) : (
+        <input
+          type="text"
+          value={value ?? ''}
+          onChange={(e) => setValue(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '6px 8px',
+            fontSize: '13px',
+            fontFamily: 'inherit',
+            border: '1px solid var(--theme-border-color)',
+            borderRadius: 3,
+            background: 'var(--theme-elevation-0)',
+            color: 'var(--theme-text)',
+            outline: 'none',
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ─── Content Block Translation Section ───────────────────────────────────
+
+function ContentBlockTranslationSection({
+  sourceContentBlocks,
+  targetContentBlocks,
+  sourceLocaleCode,
+  targetLocaleCode,
+}: {
+  sourceContentBlocks?: unknown[]
+  targetContentBlocks?: unknown[]
+  sourceLocaleCode?: string
+  targetLocaleCode?: string
+}) {
+  const [showAll, setShowAll] = useState(false)
+
+  const sourceLen = Array.isArray(sourceContentBlocks) ? sourceContentBlocks.length : 0
+  const targetLen = Array.isArray(targetContentBlocks) ? targetContentBlocks.length : 0
+  const maxLen = Math.max(sourceLen, targetLen)
+
+  if (maxLen === 0) return null
+
+  const allFields: ReturnType<typeof extractContentBlockFields> = []
+
+  for (let index = 0; index < maxLen; index++) {
+    const sourceBlock = Array.isArray(sourceContentBlocks) ? sourceContentBlocks[index] : undefined
+    const targetBlock = Array.isArray(targetContentBlocks) ? targetContentBlocks[index] : undefined
+
+    if (typeof sourceBlock === 'object' && sourceBlock !== null) {
+      // Source exists: use it for field paths and source values (normal case).
+      const fields = extractContentBlockFields(sourceBlock as Record<string, unknown>, index)
+      allFields.push(...fields)
+    } else if (typeof targetBlock === 'object' && targetBlock !== null) {
+      // Target-only (new block added on this locale): extract paths from target,
+      // but show no source value since there is no source-locale version.
+      const fields = extractContentBlockFields(targetBlock as Record<string, unknown>, index)
+      allFields.push(...fields.map((f) => ({ ...f, sourceValue: '' })))
+    }
+  }
+
+  if (allFields.length === 0) return null
+
+  const displayFields = showAll ? allFields : allFields.slice(0, 6)
+
+  return (
+    <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--theme-border-color)' }}>
+      <div
+        style={{
+          fontSize: '11px',
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          color: 'var(--theme-elevation-400)',
+          marginBottom: 12,
+        }}
+      >
+        Content Block Translation
+      </div>
+
+      {displayFields.map(({ formPath, label, sourceValue, multiline }) => (
+        <ContentBlockTranslationInput
+          key={formPath}
+          formPath={formPath}
+          label={label}
+          sourceValue={sourceValue}
+          multiline={multiline}
+          sourceLocaleCode={sourceLocaleCode}
+          targetLocaleCode={targetLocaleCode}
+        />
+      ))}
+
+      {allFields.length > 6 && (
+        <button
+          type="button"
+          onClick={() => setShowAll(!showAll)}
+          style={{
+            fontSize: '12px',
+            color: 'var(--theme-success-500)',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '4px 0',
+          }}
+        >
+          {showAll ? 'Show Less' : `Show ${allFields.length - 6} More`}
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ─── Block Translation Section ─────────────────────────────────────────────
 
 function BlockTranslationSection({
   sourceDbLayout,
   targetDbLayout,
+  sourceLocaleCode,
+  targetLocaleCode,
 }: {
   sourceDbLayout?: unknown[]
   targetDbLayout?: Array<{ data?: Record<string, unknown> }>
+  sourceLocaleCode?: string
+  targetLocaleCode?: string
 }) {
   const [showAll, setShowAll] = useState(false)
 
-  if (!sourceDbLayout || sourceDbLayout.length === 0) return null
+  const layoutToRead = Array.isArray(targetDbLayout) ? targetDbLayout : []
+  const maxLen = Math.max(
+    Array.isArray(sourceDbLayout) ? sourceDbLayout.length : 0,
+    layoutToRead.length,
+  )
 
-  // Extract all strings from source blocks
+  if (maxLen === 0) return null
+
+  // Extract strings from source blocks; fall back to target data for newly added blocks.
   const allFields: { blockIndex: number; path: string; value: string }[] = []
-  sourceDbLayout.forEach((block, index) => {
-    if (typeof block === 'object' && block !== null) {
-      const blockData = (block as { data?: Record<string, unknown> }).data
-      if (blockData) {
-        const strings = extractAllStrings(blockData)
-        strings.forEach(({ path, value }) => {
-          allFields.push({ blockIndex: index, path, value })
-        })
-      }
+  for (let index = 0; index < maxLen; index++) {
+    const sourceBlock = Array.isArray(sourceDbLayout) ? sourceDbLayout[index] : undefined
+    const targetBlock = layoutToRead[index]
+    const blockData =
+      (sourceBlock as { data?: Record<string, unknown> } | undefined)?.data ??
+      targetBlock?.data
+    if (blockData) {
+      extractAllStrings(blockData).forEach(({ path, value }) => {
+        allFields.push({ blockIndex: index, path, value })
+      })
     }
-  })
+  }
 
   if (allFields.length === 0) return null
-
-  const layoutToRead = Array.isArray(targetDbLayout) ? targetDbLayout : []
 
   const displayFields = showAll ? allFields : allFields.slice(0, 6)
 
@@ -1173,8 +1593,10 @@ function BlockTranslationSection({
           key={`${blockIndex}-${path}`}
           blockIndex={blockIndex}
           path={path}
-          sourceDbLayout={sourceDbLayout}
+          sourceDbLayout={sourceDbLayout ?? []}
           fallbackTargetData={layoutToRead[blockIndex]?.data}
+          sourceLocaleCode={sourceLocaleCode}
+          targetLocaleCode={targetLocaleCode}
         />
       ))}
 
