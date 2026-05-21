@@ -31,7 +31,7 @@ export function createDefaultField(type: FieldType): FieldDefinition {
         ],
       };
     case "relationship":
-      return { ...base, relationTo: "posts", hasMany: false };
+      return { ...base, relationTo: "", hasMany: false };
     case "array":
       return { ...base, fields: [] };
     case "group":

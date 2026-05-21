@@ -42,6 +42,12 @@ interface TranslatableField {
   sourceValue: string
 }
 
+interface PendingBlockDataUpdate {
+  id: string
+  blockIndex: number
+  data: Record<string, unknown>
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function TranslationReferencePanel(props: UIFieldClientProps) {
@@ -57,9 +63,6 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
   const currentLocale = useFormFields(([fields]) =>
     fields.locale?.value as { code?: string } | string | number | undefined
   )
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const formDispatch = useFormFields(([, dispatch]) => dispatch as (action: { type: string; path: string; value: unknown }) => void)
-
   // Read block data from individual sub-field paths so we always see the live form values.
   // dbLayoutField.value (the top-level array) is a separate slot in Payload's form state and
   // does NOT reflect edits made by BlockDataField through its own useField(dbLayout.N.data).
@@ -85,6 +88,7 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
   const [aiTranslating, setAiTranslating] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
   const [aiSuccess, setAiSuccess] = useState<string | null>(null)
+  const [pendingBlockDataUpdates, setPendingBlockDataUpdates] = useState<PendingBlockDataUpdate[]>([])
 
   // Form field bindings for direct editing
   const titleField = useField<string>({ path: 'title' })
@@ -262,15 +266,17 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
       if (translated['seo.metaTitle']) metaTitleSetValueRef.current(translated['seo.metaTitle'])
       if (translated['seo.metaDescription']) metaDescSetValueRef.current(translated['seo.metaDescription'])
       if (newLayout) {
-        // Dispatch targeted UPDATE actions per block data field instead of replacing
-        // the whole dbLayout array. Replacing the whole array triggers Payload's row
-        // reconciliation which re-registers every sub-field from the original document
-        // data, causing the translated values to immediately revert to English.
-        newLayout.forEach((row, i) => {
-          if (row.data) {
-            formDispatch({ type: 'UPDATE', path: `dbLayout.${i}.data`, value: row.data })
-          }
-        })
+        // Apply block data through per-field useField().setValue() bridges so Payload
+        // marks the form dirty and enables Save.
+        setPendingBlockDataUpdates(
+          newLayout
+            .map((row, i) =>
+              row.data
+                ? { id: `${Date.now()}-${i}`, blockIndex: i, data: row.data }
+                : null,
+            )
+            .filter((row): row is PendingBlockDataUpdate => Boolean(row)),
+        )
       }
 
       const fieldCount = Object.keys(translated).filter((k) => translated[k]).length
@@ -650,9 +656,6 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
             <BlockTranslationSection
               sourceDbLayout={reference.page.dbLayout}
               targetDbLayout={currentBlockData}
-              onFieldChange={(blockIndex, updatedData) =>
-                formDispatch({ type: 'UPDATE', path: `dbLayout.${blockIndex}.data`, value: updatedData })
-              }
             />
           </div>
         )}
@@ -721,6 +724,16 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
             </p>
           )}
         </div>
+
+        {pendingBlockDataUpdates.map((update) => (
+          <BlockDataUpdateBridge
+            key={update.id}
+            update={update}
+            onApplied={(id) =>
+              setPendingBlockDataUpdates((updates) => updates.filter((item) => item.id !== id))
+            }
+          />
+        ))}
 
         {/* Info */}
         <p
@@ -1016,16 +1029,106 @@ function setValueByPath(obj: unknown, path: string, value: string): boolean {
   return false
 }
 
+function BlockDataUpdateBridge({
+  update,
+  onApplied,
+}: {
+  update: PendingBlockDataUpdate
+  onApplied: (id: string) => void
+}) {
+  const { setValue } = useField<Record<string, unknown>>({ path: `dbLayout.${update.blockIndex}.data` })
+
+  useEffect(() => {
+    setValue(update.data)
+    onApplied(update.id)
+  }, [onApplied, setValue, update])
+
+  return null
+}
+
+function BlockTranslationInput({
+  blockIndex,
+  path,
+  sourceDbLayout,
+  fallbackTargetData,
+}: {
+  blockIndex: number
+  path: string
+  sourceDbLayout: unknown[]
+  fallbackTargetData?: Record<string, unknown>
+}) {
+  const { value, setValue } = useField<Record<string, unknown>>({ path: `dbLayout.${blockIndex}.data` })
+
+  const sourceBlock = sourceDbLayout?.[blockIndex] as { data?: Record<string, unknown> } | undefined
+  const normalizedTargetData = normalizeBlockData(value ?? fallbackTargetData)
+  const rawTargetValue = getValueByPath(normalizedTargetData, path)
+  const targetValue = rawTargetValue !== '' ? rawTargetValue : ''
+  const sourceValue = getValueByPath(sourceBlock?.data, path)
+  const label = `Block ${blockIndex + 1} > ${path}`
+
+  const handleChange = (newValue: string) => {
+    const currentData = normalizeBlockData(value ?? fallbackTargetData)
+    const base =
+      Object.keys(currentData).length > 0
+        ? JSON.parse(JSON.stringify(currentData))
+        : JSON.parse(JSON.stringify(sourceBlock?.data || {}))
+
+    setValueByPath(base, path, newValue)
+    setValue(base)
+  }
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div
+        style={{
+          fontSize: '11px',
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          color: 'var(--theme-elevation-400)',
+          marginBottom: 4,
+        }}
+      >
+        {label}
+      </div>
+      {sourceValue ? (
+        <div
+          style={{
+            fontSize: '11px',
+            color: 'var(--theme-elevation-500)',
+            marginBottom: 6,
+          }}
+        >
+          Source: {sourceValue}
+        </div>
+      ) : null}
+      <input
+        type="text"
+        value={targetValue}
+        onChange={(e) => handleChange(e.target.value)}
+        style={{
+          width: '100%',
+          padding: '6px 8px',
+          fontSize: '13px',
+          fontFamily: 'inherit',
+          border: '1px solid var(--theme-border-color)',
+          borderRadius: 3,
+          background: 'var(--theme-elevation-0)',
+          color: 'var(--theme-text)',
+          outline: 'none',
+        }}
+      />
+    </div>
+  )
+}
+
 // ─── Block Translation Section ─────────────────────────────────────────────
 
 function BlockTranslationSection({
   sourceDbLayout,
   targetDbLayout,
-  onFieldChange,
 }: {
   sourceDbLayout?: unknown[]
   targetDbLayout?: Array<{ data?: Record<string, unknown> }>
-  onFieldChange: (blockIndex: number, updatedData: Record<string, unknown>) => void
 }) {
   const [showAll, setShowAll] = useState(false)
 
@@ -1051,18 +1154,6 @@ function BlockTranslationSection({
 
   const displayFields = showAll ? allFields : allFields.slice(0, 6)
 
-  const handleFieldChange = (blockIndex: number, path: string, newValue: string) => {
-    const sourceBlock = sourceDbLayout[blockIndex] as { data?: Record<string, unknown> }
-    const currentData = layoutToRead[blockIndex]?.data
-    // Use current translated data if present, otherwise seed from source to preserve all fields
-    const base =
-      currentData && Object.keys(currentData).length > 0
-        ? JSON.parse(JSON.stringify(currentData))
-        : JSON.parse(JSON.stringify(sourceBlock?.data || {}))
-    setValueByPath(base, path, newValue)
-    onFieldChange(blockIndex, base)
-  }
-
   return (
     <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--theme-border-color)' }}>
       <div
@@ -1077,59 +1168,15 @@ function BlockTranslationSection({
         Block Content Translation
       </div>
 
-      {displayFields.map(({ blockIndex, path, value }) => {
-        const targetBlock = Array.isArray(layoutToRead) ? layoutToRead[blockIndex] : undefined
-        const normalizedTargetData = targetBlock?.data ? normalizeBlockData(targetBlock.data) : undefined
-        const rawTargetValue = getValueByPath(normalizedTargetData, path)
-        const targetValue = rawTargetValue !== '' ? rawTargetValue : ''
-
-        const sourceBlock = sourceDbLayout?.[blockIndex] as { data?: Record<string, unknown> }
-        const sourceValue = getValueByPath(sourceBlock?.data, path)
-        const label = `Block ${blockIndex + 1} › ${path}`
-
-        return (
-          <div key={`${blockIndex}-${path}`} style={{ marginBottom: 12 }}>
-            <div
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                textTransform: 'uppercase',
-                color: 'var(--theme-elevation-400)',
-                marginBottom: 4,
-              }}
-            >
-              {label}
-            </div>
-            {sourceValue ? (
-              <div
-                style={{
-                  fontSize: '11px',
-                  color: 'var(--theme-elevation-500)',
-                  marginBottom: 6,
-                }}
-              >
-                Source: {sourceValue}
-              </div>
-            ) : null}
-            <input
-              type="text"
-              value={targetValue}
-              onChange={(e) => handleFieldChange(blockIndex, path, e.target.value)}
-              style={{
-                width: '100%',
-                padding: '6px 8px',
-                fontSize: '13px',
-                fontFamily: 'inherit',
-                border: '1px solid var(--theme-border-color)',
-                borderRadius: 3,
-                background: 'var(--theme-elevation-0)',
-                color: 'var(--theme-text)',
-                outline: 'none',
-              }}
-            />
-          </div>
-        )
-      })}
+      {displayFields.map(({ blockIndex, path }) => (
+        <BlockTranslationInput
+          key={`${blockIndex}-${path}`}
+          blockIndex={blockIndex}
+          path={path}
+          sourceDbLayout={sourceDbLayout}
+          fallbackTargetData={layoutToRead[blockIndex]?.data}
+        />
+      ))}
 
       {allFields.length > 6 && (
         <button
