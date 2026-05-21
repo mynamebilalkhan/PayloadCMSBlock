@@ -15,34 +15,24 @@ export const Footer: GlobalConfig = {
       label: 'Logo',
     },
     {
-      name: 'columns',
+      name: 'navigation',
       type: 'array',
-      label: 'Footer Columns',
-      admin: { description: 'Link groups displayed in columns across the footer.' },
+      label: 'Navigation Links',
+      admin: {
+        description: 'Flat list of footer navigation links (0 depth).',
+      },
       fields: [
         {
-          name: 'title',
+          name: 'label',
           type: 'text',
-          label: 'Column Title',
+          required: true,
+          label: 'Link Label',
         },
         {
-          name: 'links',
-          type: 'array',
-          label: 'Links',
-          fields: [
-            {
-              name: 'label',
-              type: 'text',
-              required: true,
-              label: 'Label',
-            },
-            {
-              name: 'url',
-              type: 'text',
-              required: true,
-              label: 'URL',
-            },
-          ],
+          name: 'url',
+          type: 'text',
+          required: true,
+          label: 'URL',
         },
       ],
     },

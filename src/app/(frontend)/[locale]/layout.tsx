@@ -141,7 +141,7 @@ export default async function LocaleLayout({
             <main>{children}</main>
             <SiteFooter
               logo={(footer as Record<string, unknown>).logo as SiteFooterProps['logo']}
-              columns={(footer as Record<string, unknown>).columns as SiteFooterProps['columns']}
+              navigation={(footer as Record<string, unknown>).navigation as SiteFooterProps['navigation']}
               copyright={(footer as Record<string, unknown>).copyright as string | undefined}
               socialLinks={(footer as Record<string, unknown>).socialLinks as SiteFooterProps['socialLinks']}
             />
