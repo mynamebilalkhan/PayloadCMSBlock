@@ -85,11 +85,34 @@ function tagTypographyGroup(
   }
 }
 
+const COLOR_FIELD_COMPONENT = '@/components/admin/ColorPickerField#ColorPickerField'
+
+function themeColorField(
+  name: string,
+  label: string,
+  defaultValue: string,
+  description: string,
+) {
+  return {
+    name,
+    type: 'text' as const,
+    label,
+    defaultValue,
+    admin: {
+      width: '14.28%',
+      description,
+      components: {
+        Field: COLOR_FIELD_COMPONENT,
+      },
+    },
+  }
+}
+
 export const Theme: GlobalConfig = {
   slug: 'theme',
-  label: 'Global Theme',
+  label: 'Global Styles',
   admin: {
-    group: 'Settings',
+    group: 'Site Settings',
     description: 'Centralized design tokens applied across all frontend blocks.',
   },
   fields: [
@@ -100,53 +123,51 @@ export const Theme: GlobalConfig = {
       label: 'Colors',
       fields: [
         {
-          name: 'primary',
-          type: 'text',
-          label: 'Primary',
-          defaultValue: '#4f46e5',
-          admin: { description: 'Brand color used for buttons, links, and highlights.' },
-        },
-        {
-          name: 'secondary',
-          type: 'text',
-          label: 'Secondary',
-          defaultValue: '#7c3aed',
-          admin: { description: 'Complementary brand color for gradients and accents.' },
-        },
-        {
-          name: 'accent',
-          type: 'text',
-          label: 'Accent',
-          defaultValue: '#06b6d4',
-          admin: { description: 'Used for badges, tags, and small decorative elements.' },
-        },
-        {
-          name: 'background',
-          type: 'text',
-          label: 'Page Background',
-          defaultValue: '#ffffff',
-          admin: { description: 'Default background color of the page.' },
-        },
-        {
-          name: 'surface',
-          type: 'text',
-          label: 'Surface (Cards & Panels)',
-          defaultValue: '#f9fafb',
-          admin: { description: 'Background color for cards, panels, and section stripes.' },
-        },
-        {
-          name: 'text',
-          type: 'text',
-          label: 'Body Text',
-          defaultValue: '#111827',
-          admin: { description: 'Default color for paragraphs and body copy.' },
-        },
-        {
-          name: 'mutedText',
-          type: 'text',
-          label: 'Muted / Secondary Text',
-          defaultValue: '#6b7280',
-          admin: { description: 'Subtitles, captions, placeholder text, and helper copy.' },
+          type: 'row',
+          fields: [
+            themeColorField(
+              'primary',
+              'Primary',
+              '#4f46e5',
+              'Brand color used for buttons, links, and highlights.',
+            ),
+            themeColorField(
+              'secondary',
+              'Secondary',
+              '#7c3aed',
+              'Complementary brand color for gradients and accents.',
+            ),
+            themeColorField(
+              'accent',
+              'Accent',
+              '#06b6d4',
+              'Used for badges, tags, and small decorative elements.',
+            ),
+            themeColorField(
+              'background',
+              'Page Background',
+              '#ffffff',
+              'Default background color of the page.',
+            ),
+            themeColorField(
+              'surface',
+              'Surface (Cards & Panels)',
+              '#f9fafb',
+              'Background color for cards, panels, and section stripes.',
+            ),
+            themeColorField(
+              'text',
+              'Body Text',
+              '#111827',
+              'Default color for paragraphs and body copy.',
+            ),
+            themeColorField(
+              'mutedText',
+              'Muted / Secondary Text',
+              '#6b7280',
+              'Subtitles, captions, placeholder text, and helper copy.',
+            ),
+          ],
         },
       ],
     },
