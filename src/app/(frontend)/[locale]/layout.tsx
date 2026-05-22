@@ -120,7 +120,7 @@ export default async function LocaleLayout({
   return (
     <LocaleProvider locale={localeData}>
       <html
-        lang={localeCode}
+        lang={localeData.code}
         dir={localeData.isRTL ? 'rtl' : 'ltr'}
         className={`${dmSans.variable} ${michroma.variable}`}
       >
