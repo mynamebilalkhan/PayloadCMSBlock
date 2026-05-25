@@ -97,6 +97,7 @@ export const Pages: CollectionConfig = {
       label: 'Slug',
       admin: {
         description: 'URL path, e.g. "about-us". Use "/" for the homepage. Must be unique per locale.',
+        position: 'sidebar',
         components: {
           Field: '@/components/admin/SlugField#SlugField',
         },
@@ -173,6 +174,9 @@ export const Pages: CollectionConfig = {
       defaultValue: 'draft',
       required: true,
       label: 'Status',
+      admin: {
+        position: 'sidebar',
+      },
     },
     // ─── SEO ───────────────────────────────────────────────────────────────
     {
