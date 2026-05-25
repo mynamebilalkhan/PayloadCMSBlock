@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto'
 import { coerceRelationshipId } from '@/lib/payload/coerceRelationshipId'
 import { normalizeBlockData } from '@/lib/blockData/normalizeBlockData'
 import { slugBeforeValidate } from '@/lib/payload/slug'
+import { propagatePageToEnabledLocalesAfterCreate } from '@/lib/admin/propagatePageToEnabledLocales'
 import { Testimonials } from '@/blocks/Generic/Testimonials/config'
 
 // import { OverviewField } from "@/fields/OverviewField";
@@ -61,13 +62,21 @@ export const Pages: CollectionConfig = {
       slugBeforeValidate('title', true),
     ],
     beforeChange: [
-      ({ data }) => {
+      ({ data, operation, req }) => {
         if (data.locale != null && data.locale !== '') {
           data.locale = coerceRelationshipId(data.locale as string | number)
         }
         // Auto-generate translationGroupId on create (not on update)
         if (!data.translationGroupId) {
           data.translationGroupId = randomUUID()
+        }
+        if (operation === 'create' && data.createLocaleOnSave != null) {
+          req.context = req.context ?? {}
+          req.context.pendingCreateLocaleOnSave = data.createLocaleOnSave
+        }
+        if (operation === 'update') {
+          delete data.createTranslationsForAllLocales
+          delete data.createLocaleOnSave
         }
         if (Array.isArray(data.dbLayout)) {
           for (const row of data.dbLayout) {
@@ -80,6 +89,7 @@ export const Pages: CollectionConfig = {
         return data
       },
     ],
+    afterChange: [propagatePageToEnabledLocalesAfterCreate],
   },
   fields: [
     // ─── Sidebar ───────────────────────────────────────────────────────────
@@ -128,6 +138,19 @@ export const Pages: CollectionConfig = {
         position: 'sidebar',
         components: {
           Field: '@/components/admin/PageLocaleField#PageLocaleField',
+        },
+      },
+    },
+    {
+      name: 'createLocaleOnSave',
+      type: 'json',
+      label: 'Create translations',
+      admin: {
+        position: 'sidebar',
+        description:
+          'When saving a new page, optionally create draft copies in other languages.',
+        components: {
+          Field: '@/components/admin/CreateLocaleVariantsField#CreateLocaleVariantsField',
         },
       },
     },

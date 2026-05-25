@@ -9,6 +9,7 @@ import {
   sampleArrayRowIds,
   sanitizePageCopyForCreate,
 } from '@/lib/admin/sanitizePageCopyForCreate'
+import { SKIP_LOCALE_AUTO_CREATE } from '@/lib/admin/localePageConstants'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,28 +42,43 @@ export async function duplicatePageForLocale({
   user,
   pageId,
   targetLocaleId,
+  req: parentReq,
+  sourcePage: sourcePageFromCaller,
 }: {
   payload: Payload
   user: TypedUser
   pageId: string | number
   targetLocaleId: string | number
+  /** When set, marks nested creates so locale auto-propagate does not run again. */
+  req?: Partial<PayloadRequest>
+  /** Use the just-created document from afterChange to avoid a race on findByID. */
+  sourcePage?: Page
 }): Promise<DuplicatePageResult> {
-  const req: Partial<PayloadRequest> = { user }
+  const req: Partial<PayloadRequest> = {
+    ...parentReq,
+    user: parentReq?.user ?? user,
+    context: {
+      ...(parentReq?.context ?? {}),
+      [SKIP_LOCALE_AUTO_CREATE]: true,
+    },
+  }
   const coercedPageId = coerceRelationshipId(pageId)
   const coercedTargetLocaleId = coerceRelationshipId(targetLocaleId)
 
-  let sourcePage
-  try {
-    sourcePage = await payload.findByID({
-      collection: 'pages',
-      id: coercedPageId,
-      depth: 0,
-      req,
-      overrideAccess: false,
-      user,
-    })
-  } catch {
-    return { ok: false, status: 404, error: 'Source page not found.' }
+  let sourcePage = sourcePageFromCaller
+  if (!sourcePage) {
+    try {
+      sourcePage = (await payload.findByID({
+        collection: 'pages',
+        id: coercedPageId,
+        depth: 0,
+        req,
+        overrideAccess: false,
+        user,
+      })) as Page
+    } catch {
+      return { ok: false, status: 404, error: 'Source page not found.' }
+    }
   }
 
   const translationGroupId = sourcePage.translationGroupId as string | null
