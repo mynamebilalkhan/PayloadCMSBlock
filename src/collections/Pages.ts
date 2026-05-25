@@ -96,7 +96,7 @@ export const Pages: CollectionConfig = {
       required: true,
       label: 'Slug',
       admin: {
-        description: 'URL path, e.g. "about-us". Use "/" for the homepage. Must be unique per locale.',
+        description: 'URL path, e.g. "about-us". Use "/" for the homepage. Auto-syncs from title until you unlock. Must be unique per locale.',
         position: 'sidebar',
         components: {
           Field: '@/components/admin/SlugField#SlugField',
@@ -106,6 +106,21 @@ export const Pages: CollectionConfig = {
         if (!value) return 'Slug is required.'
         if (!/^[a-z0-9/-]+$/.test(value)) return 'Slug must be lowercase with hyphens or slashes.'
         return true
+      },
+    },
+    {
+      name: 'status',
+      type: 'select',
+      options: [
+        { label: 'Draft', value: 'draft' },
+        { label: 'Published', value: 'published' },
+        { label: 'Archived', value: 'archived' },
+      ],
+      defaultValue: 'draft',
+      required: true,
+      label: 'Status',
+      admin: {
+        position: 'sidebar',
       },
     },
     // ─── Locale & Translation ──────────────────────────────────────────────────
@@ -161,21 +176,6 @@ export const Pages: CollectionConfig = {
         components: {
           Field: '@/components/admin/TranslationReferencePanel#TranslationReferencePanel',
         },
-      },
-    },
-    {
-      name: 'status',
-      type: 'select',
-      options: [
-        { label: 'Draft', value: 'draft' },
-        { label: 'Published', value: 'published' },
-        { label: 'Archived', value: 'archived' },
-      ],
-      defaultValue: 'draft',
-      required: true,
-      label: 'Status',
-      admin: {
-        position: 'sidebar',
       },
     },
     // ─── SEO ───────────────────────────────────────────────────────────────

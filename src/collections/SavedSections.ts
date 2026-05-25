@@ -1,5 +1,7 @@
 import type { CollectionConfig } from 'payload'
 
+import { slugBeforeValidate } from '@/lib/payload/slug'
+
 /**
  * saved-sections: reusable page sections that editors can save once and
  * reuse across multiple pages.
@@ -24,18 +26,7 @@ export const SavedSections: CollectionConfig = {
     read: () => true,
   },
   hooks: {
-    beforeChange: [
-      ({ data }) => {
-        if (data.slug) {
-          data.slug = data.slug
-            .toLowerCase()
-            .trim()
-            .replace(/[^a-z0-9-]+/g, '-')
-            .replace(/^-|-$/g, '')
-        }
-        return data
-      },
-    ],
+    beforeValidate: [slugBeforeValidate('title', false)],
   },
   fields: [
     // ─── Identity ────────────────────────────────────────────────────────────
@@ -52,7 +43,10 @@ export const SavedSections: CollectionConfig = {
       unique: true,
       label: 'Slug',
       admin: {
-        description: 'Machine-readable unique identifier. Auto-normalised to kebab-case.',
+        description: 'Machine-readable unique identifier. Auto-syncs from title until you unlock.',
+        components: {
+          Field: '@/components/admin/SlugField#SlugField',
+        },
       },
     },
     {

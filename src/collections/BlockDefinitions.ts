@@ -38,7 +38,7 @@ export const BlockDefinitions: CollectionConfig = {
       unique: true,
       label: 'Slug',
       admin: {
-        description: 'Machine-readable unique identifier, e.g. "hero-banner". Auto-normalised.',
+        description: 'Machine-readable unique identifier, e.g. "hero-banner". Auto-syncs from name until you unlock.',
         components: {
           Field: '@/components/admin/SlugField#SlugField',
         },

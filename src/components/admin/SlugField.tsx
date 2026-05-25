@@ -61,10 +61,10 @@ const SlugFieldContent: TextFieldClientComponent = ({ field, path: pathFromProps
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      setIsLocked(false)
+      if (isLocked) return
       setValue(e.target.value)
     },
-    [setValue],
+    [isLocked, setValue],
   )
 
   const toggleLock = useCallback(() => {
@@ -76,6 +76,8 @@ const SlugFieldContent: TextFieldClientComponent = ({ field, path: pathFromProps
       return nextLocked
     })
   }, [fallbackValue, setValue, allowSlashes])
+
+  const inputLocked = isLocked || isReadOnly
 
   return (
     <div className={[fieldBaseClass, 'text', 'slug-field'].filter(Boolean).join(' ')}>
@@ -96,10 +98,15 @@ const SlugFieldContent: TextFieldClientComponent = ({ field, path: pathFromProps
               id={inputId}
               name={fieldPath}
               value={value ?? ''}
-              disabled={isReadOnly}
+              readOnly={inputLocked}
+              disabled={disabled}
               onChange={handleInputChange}
+              aria-readonly={inputLocked}
               style={{
                 width: '100%',
+                cursor: inputLocked ? 'not-allowed' : 'text',
+                background: inputLocked ? 'var(--theme-elevation-50, #f9fafb)' : undefined,
+                color: inputLocked ? 'var(--theme-elevation-600, #4b5563)' : undefined,
               }}
             />
           </div>
@@ -124,22 +131,34 @@ const SlugFieldContent: TextFieldClientComponent = ({ field, path: pathFromProps
               userSelect: 'none',
               transition: 'all 0.15s ease',
             }}
-            title={isLocked ? 'Slug is auto-synced with Title/Name. Click to unlock.' : 'Slug is custom. Click to auto-sync with Title/Name.'}
+            title={
+              isLocked
+                ? 'Slug auto-syncs from Title/Name. Click Unlock to edit manually.'
+                : 'Slug is custom. Click Lock to auto-sync from Title/Name again.'
+            }
           >
             {isLocked ? (
               <>
                 <Lock size={14} style={{ color: 'var(--color-primary, #4f46e5)' }} />
-                <span>Auto</span>
+                <span>Unlock</span>
               </>
             ) : (
               <>
                 <Unlock size={14} />
-                <span>Custom</span>
+                <span>Lock</span>
               </>
             )}
           </button>
         </div>
-        <FieldDescription description={description} path={fieldPath} />
+        <FieldDescription
+          description={
+            description ??
+            (isLocked
+              ? 'Auto-generated from Title/Name. Unlock to set a custom slug.'
+              : 'Custom slug. Lock to sync again from Title/Name.')
+          }
+          path={fieldPath}
+        />
       </div>
     </div>
   )
