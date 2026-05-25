@@ -144,8 +144,10 @@ export async function duplicatePageForLocale({
     }
   }
 
+  // Slug stays the same across locales (URL path); only suffix on per-locale conflict.
   const baseSlug = sourcePage.slug as string
   let slug = baseSlug
+  const placeholderTitle = `[${targetLocale.name}] — set page title`
 
   const slugConflict = await payload.find({
     collection: 'pages',
@@ -189,7 +191,7 @@ export async function duplicatePageForLocale({
     newPage = await payload.create({
       collection: 'pages',
       data: {
-        title: sourcePage.title,
+        title: placeholderTitle,
         slug,
         status: 'draft',
         locale: targetLocaleIdNormalized as number,

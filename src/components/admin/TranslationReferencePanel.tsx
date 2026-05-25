@@ -137,12 +137,10 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
   const dbLayoutField = useField<Array<{ data?: Record<string, unknown> }>>({ path: 'dbLayout' })
 
   // Stable refs so async callbacks always call the latest setValue
-  const titleSetValueRef = useRef(titleField.setValue)
   const metaTitleSetValueRef = useRef(metaTitleField.setValue)
   const metaDescSetValueRef = useRef(metaDescField.setValue)
   const dbLayoutSetValueRef = useRef(dbLayoutField.setValue)
 
-  useEffect(() => { titleSetValueRef.current = titleField.setValue })
   useEffect(() => { metaTitleSetValueRef.current = metaTitleField.setValue })
   useEffect(() => { metaDescSetValueRef.current = metaDescField.setValue })
   useEffect(() => { dbLayoutSetValueRef.current = dbLayoutField.setValue })
@@ -203,7 +201,6 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
       // ── 1. Collect simple page-level translatable fields ──────────────────
       const content: Record<string, string> = {}
 
-      if (page.title) content['title'] = page.title
       if (page.seo?.metaTitle) content['seo.metaTitle'] = page.seo.metaTitle
       if (page.seo?.metaDescription) content['seo.metaDescription'] = page.seo.metaDescription
 
@@ -319,7 +316,6 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
       }
 
       // Apply translations before setAiTranslating(false) so Save cannot race ahead.
-      if (translated['title']) titleSetValueRef.current(translated['title'])
       if (translated['seo.metaTitle']) metaTitleSetValueRef.current(translated['seo.metaTitle'])
       if (translated['seo.metaDescription']) metaDescSetValueRef.current(translated['seo.metaDescription'])
       if (newLayout) {
@@ -588,17 +584,15 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
 
         {/* Page Fields with Translation Inputs */}
         <div style={{ marginBottom: 16 }}>
-          <TranslationRow
-            label="Title"
-            sourceValue={page.title}
-            targetValue={titleField.value || ''}
-            onTargetChange={(val) => titleField.setValue(val)}
+          <LocaleLockedFieldNote
+            label="Page title"
+            currentValue={titleField.value || ''}
+            hint="Edit in the Hero tab. Not copied or translated from the reference locale."
           />
-          <TranslationRow
+          <LocaleLockedFieldNote
             label="Slug"
-            sourceValue={page.slug}
-            targetValue={slugField.value || ''}
-            onTargetChange={(val) => slugField.setValue(val)}
+            currentValue={slugField.value || ''}
+            hint="Edit in the sidebar. Same URL path per locale is typical; not auto-translated."
           />
           <TranslationRow
             label="Meta Title"
@@ -773,7 +767,7 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
               lineHeight: 1.4,
             }}
           >
-            Generate draft translations for title, SEO, and block content using Gemini AI. Review before saving.
+            Generate draft translations for SEO and block content using Gemini AI. Page title and slug are set per locale in the sidebar — not auto-translated.
           </p>
 
           <AdminButton
@@ -843,6 +837,57 @@ function TranslationReferencePanelContent(_props: UIFieldClientProps) {
           Type translations in the fields above. Changes sync with the main form.
         </p>
       </div>
+    </div>
+  )
+}
+
+// ─── Locale-locked fields (title / slug) ───────────────────────────────────
+
+function LocaleLockedFieldNote({
+  label,
+  currentValue,
+  hint,
+}: {
+  label: string
+  currentValue: string
+  hint: string
+}) {
+  return (
+    <div
+      style={{
+        marginBottom: 14,
+        padding: '8px 10px',
+        borderRadius: 3,
+        border: '1px solid var(--theme-elevation-150)',
+        background: 'var(--theme-elevation-50, #f9fafb)',
+      }}
+    >
+      <div
+        style={{
+          fontSize: '11px',
+          fontWeight: 600,
+          textTransform: 'uppercase',
+          color: 'var(--theme-elevation-500)',
+          marginBottom: 4,
+        }}
+      >
+        {label}
+        <span style={{ fontWeight: 400, marginLeft: 6, color: 'var(--theme-elevation-400)' }}>
+          (per locale)
+        </span>
+      </div>
+      <div
+        style={{
+          fontSize: '13px',
+          color: currentValue ? 'var(--theme-text)' : 'var(--theme-elevation-400)',
+          fontStyle: currentValue ? 'normal' : 'italic',
+        }}
+      >
+        {currentValue || 'Not set yet'}
+      </div>
+      <p style={{ fontSize: '11px', color: 'var(--theme-elevation-500)', margin: '6px 0 0', lineHeight: 1.4 }}>
+        {hint}
+      </p>
     </div>
   )
 }
