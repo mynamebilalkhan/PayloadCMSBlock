@@ -5,7 +5,6 @@ import { coerceRelationshipId } from '@/lib/payload/coerceRelationshipId'
 import { normalizeBlockData } from '@/lib/blockData/normalizeBlockData'
 import { slugBeforeValidate } from '@/lib/payload/slug'
 import { Testimonials } from '@/blocks/Generic/Testimonials/config'
-import { hero } from '../heros/config'
 
 // import { OverviewField } from "@/fields/OverviewField";
 // import { MetaTitleField } from "@/fields/MetaTitleField";
@@ -83,13 +82,7 @@ export const Pages: CollectionConfig = {
     ],
   },
   fields: [
-    // ─── Meta ──────────────────────────────────────────────────────────────
-    {
-      name: 'title',
-      type: 'text',
-      required: true,
-      label: 'Page Title',
-    },
+    // ─── Sidebar ───────────────────────────────────────────────────────────
     {
       name: 'slug',
       type: 'text',
@@ -143,9 +136,9 @@ export const Pages: CollectionConfig = {
       type: 'text',
       label: 'Translation Group ID',
       admin: {
-        description: 'UUID shared across all locale variants of the same page. Auto-generated on create.',
+        hidden: true,
         readOnly: true,
-        position: 'sidebar',
+        description: 'Internal UUID linking locale variants. Auto-generated on create.',
       },
     },
     {
@@ -178,132 +171,166 @@ export const Pages: CollectionConfig = {
         },
       },
     },
-    // ─── SEO ───────────────────────────────────────────────────────────────
+    // ─── Main editor tabs ────────────────────────────────────────────────────
     {
-      name: 'seo',
-      type: 'group',
-      label: 'SEO',
-      fields: [
+      type: 'tabs',
+      tabs: [
         {
-          name: 'metaTitle',
-          type: 'text',
-          label: 'Meta Title',
-        },
-        {
-          name: 'metaDescription',
-          type: 'textarea',
-          label: 'Meta Description',
-        },
-        {
-          name: 'ogImage',
-          type: 'upload',
-          relationTo: 'media',
-          label: 'OG Image',
-        },
-        {
-          name: 'noIndex',
-          type: 'checkbox',
-          label: 'No Index',
-          defaultValue: false,
-        },
-      ],
-    },
-    // ─── Page Builder ──────────────────────────────────────────────────────
-    {
-      name: 'dbLayout',
-      type: 'array',
-      label: 'Page Builder',
-      admin: {
-        description: 'Build the page with reusable dynamic sections.',
-      },
-      fields: [
-        {
-          name: 'blockDefinition',
-          type: 'relationship',
-          relationTo: 'block-definitions',
-          required: true,
-          label: 'Block Type',
-          filterOptions: {
-            isDeprecated: { not_equals: true },
-          },
-        },
-        {
-          name: 'blockVersion',
-          type: 'relationship',
-          relationTo: 'block-definition-versions',
-          required: true,
-          label: 'Schema Version',
-          admin: {
-            description:
-              'Pinned schema version. Locked after first save to preserve backward compatibility.',
-            condition: (_, siblingData) => Boolean(siblingData?.blockDefinition),
-          },
-          filterOptions: ({ siblingData }) => {
-            const data = siblingData as Record<string, unknown> | undefined
-            if (!data?.blockDefinition) return false
-            return { blockDefinition: { equals: data.blockDefinition } }
-          },
-        },
-        {
-          name: 'instanceId',
-          type: 'text',
-          label: 'Instance ID',
-          admin: {
-            readOnly: true,
-            description: 'Stable unique ID for this block instance (for reuse and targeting).',
-          },
-        },
-        {
-          name: 'label',
-          type: 'text',
-          label: 'Instance Label',
-          admin: { description: 'Optional editor label for this block instance.' },
-        },
-        {
-          name: 'data',
-          type: 'json',
-          required: true,
-          label: 'Block Data',
-          admin: {
-            description:
-              'Field values for this block instance. Must conform to the pinned schema version.',
-            components: {
-              Field: '@/components/BlockDataField#BlockDataField',
+          label: 'Hero',
+          description: 'Page title and SEO metadata.',
+          fields: [
+            {
+              name: 'title',
+              type: 'text',
+              required: true,
+              label: 'Page Title',
             },
-          },
+            {
+              name: 'seo',
+              type: 'group',
+              label: 'SEO',
+              fields: [
+                {
+                  name: 'metaTitle',
+                  type: 'text',
+                  label: 'Meta Title',
+                },
+                {
+                  name: 'metaDescription',
+                  type: 'textarea',
+                  label: 'Meta Description',
+                },
+                {
+                  name: 'ogImage',
+                  type: 'upload',
+                  relationTo: 'media',
+                  label: 'OG Image',
+                },
+                {
+                  name: 'noIndex',
+                  type: 'checkbox',
+                  label: 'No Index',
+                  defaultValue: false,
+                },
+              ],
+            },
+          ],
         },
         {
-          name: 'hidden',
-          type: 'checkbox',
-          label: 'Hidden',
-          defaultValue: false,
-          admin: { description: 'Hide this block on the frontend without deleting it.' },
-        },
-        {
-          name: 'anchor',
-          type: 'text',
-          label: 'Anchor ID',
-          admin: {
-            description:
-              'Optional HTML anchor for deep-linking, e.g. "about-section". Rendered as id attribute.',
-          },
+          label: 'Content',
+          description:
+            'Add the sections visitors see on this page (hero, features, testimonials, and more).',
+          fields: [
+            {
+              name: 'dbLayout',
+              type: 'array',
+              label: 'Page sections',
+              labels: {
+                singular: 'Section',
+                plural: 'Sections',
+              },
+              admin: {
+                description:
+                  'Main page content. Click “Add Section”, choose a section type (e.g. Hero Banner, Card Grid), then fill in the fields. Drag rows to reorder.',
+              },
+              fields: [
+                {
+                  name: 'blockDefinition',
+                  type: 'relationship',
+                  relationTo: 'block-definitions',
+                  required: true,
+                  label: 'Section type',
+                  admin: {
+                    description: 'What kind of section this is, e.g. Hero Banner or FAQ.',
+                  },
+                  filterOptions: {
+                    isDeprecated: { not_equals: true },
+                  },
+                },
+                {
+                  name: 'blockVersion',
+                  type: 'relationship',
+                  relationTo: 'block-definition-versions',
+                  required: true,
+                  label: 'Section version',
+                  admin: {
+                    description:
+                      'Keeps this section compatible after schema updates. Usually auto-selected.',
+                    condition: (_, siblingData) => Boolean(siblingData?.blockDefinition),
+                  },
+                  filterOptions: ({ siblingData }) => {
+                    const data = siblingData as Record<string, unknown> | undefined
+                    if (!data?.blockDefinition) return false
+                    return { blockDefinition: { equals: data.blockDefinition } }
+                  },
+                },
+                {
+                  name: 'instanceId',
+                  type: 'text',
+                  label: 'Section ID',
+                  admin: {
+                    hidden: true,
+                    readOnly: true,
+                  },
+                },
+                {
+                  name: 'label',
+                  type: 'text',
+                  label: 'Section label',
+                  admin: {
+                    description: 'Optional name for editors only (e.g. “Homepage hero”). Not shown on the website.',
+                  },
+                },
+                {
+                  name: 'data',
+                  type: 'json',
+                  required: true,
+                  label: 'Section content',
+                  admin: {
+                    description: 'Headlines, images, buttons, and other fields for this section.',
+                    components: {
+                      Field: '@/components/BlockDataField#BlockDataField',
+                    },
+                  },
+                },
+                {
+                  name: 'hidden',
+                  type: 'checkbox',
+                  label: 'Hide on website',
+                  defaultValue: false,
+                  admin: {
+                    description: 'Turn on to hide this section from visitors without deleting it.',
+                  },
+                },
+                {
+                  name: 'anchor',
+                  type: 'text',
+                  label: 'Link anchor',
+                  admin: {
+                    description:
+                      'Optional ID for in-page links, e.g. "pricing" → yoursite.com/page#pricing',
+                  },
+                },
+              ],
+            },
+            {
+              name: 'contentBlocks',
+              type: 'blocks',
+              label: 'Ready-made blocks',
+              labels: {
+                singular: 'Block',
+                plural: 'Blocks',
+              },
+              blocks: [Testimonials],
+              admin: {
+                initCollapsed: true,
+                description:
+                  'Pre-built blocks with fixed layouts (e.g. testimonials today; more types coming). For flexible sections—hero, grids, FAQ—use Page sections above.',
+              },
+            },
+          ],
         },
       ],
-    },
-    // ─── Content Blocks ────────────────────────────────────────────────────
-    // hero,
-    {
-      name: 'contentBlocks',
-      type: 'blocks',
-      label: 'Content Blocks',
-      blocks: [
-        // Generic
-        Testimonials,
-      ],
-      admin: {
-        initCollapsed: true,
-        description: 'Add structured content sections to this page.',
-      },
     },
   ],
   timestamps: true,
