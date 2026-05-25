@@ -1,5 +1,6 @@
 import type { CollectionConfig } from 'payload'
 import { validateBlockSchema } from '@/validation'
+import { slugBeforeValidate } from '@/lib/payload/slug'
 
 /**
  * block-definitions: master registry of block types.
@@ -18,18 +19,8 @@ export const BlockDefinitions: CollectionConfig = {
     read: () => true,
   },
   hooks: {
-    beforeChange: [
-      ({ data }) => {
-        // Normalise slug to kebab-case
-        if (data.slug) {
-          data.slug = data.slug
-            .toLowerCase()
-            .trim()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-|-$/g, '')
-        }
-        return data
-      },
+    beforeValidate: [
+      slugBeforeValidate('name', false),
     ],
   },
   fields: [
@@ -48,6 +39,9 @@ export const BlockDefinitions: CollectionConfig = {
       label: 'Slug',
       admin: {
         description: 'Machine-readable unique identifier, e.g. "hero-banner". Auto-normalised.',
+        components: {
+          Field: '@/components/admin/SlugField#SlugField',
+        },
       },
       validate: (value: string | null | undefined) => {
         if (!value) return 'Slug is required.'

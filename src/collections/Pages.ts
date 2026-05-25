@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto'
 
 import { coerceRelationshipId } from '@/lib/payload/coerceRelationshipId'
 import { normalizeBlockData } from '@/lib/blockData/normalizeBlockData'
+import { slugBeforeValidate } from '@/lib/payload/slug'
 import { Testimonials } from '@/blocks/Generic/Testimonials/config'
 import { hero } from '../heros/config'
 
@@ -57,15 +58,11 @@ export const Pages: CollectionConfig = {
     delete: ({ req }) => Boolean(req.user),
   },
   hooks: {
+    beforeValidate: [
+      slugBeforeValidate('title', true),
+    ],
     beforeChange: [
       ({ data }) => {
-        if (data.slug) {
-          data.slug = data.slug
-            .toLowerCase()
-            .trim()
-            .replace(/[^a-z0-9/]+/g, '-')
-            .replace(/^-|-$/g, '')
-        }
         if (data.locale != null && data.locale !== '') {
           data.locale = coerceRelationshipId(data.locale as string | number)
         }
@@ -98,7 +95,12 @@ export const Pages: CollectionConfig = {
       type: 'text',
       required: true,
       label: 'Slug',
-      admin: { description: 'URL path, e.g. "about-us". Use "/" for the homepage. Must be unique per locale.' },
+      admin: {
+        description: 'URL path, e.g. "about-us". Use "/" for the homepage. Must be unique per locale.',
+        components: {
+          Field: '@/components/admin/SlugField#SlugField',
+        },
+      },
       validate: (value: string | null | undefined) => {
         if (!value) return 'Slug is required.'
         if (!/^[a-z0-9/-]+$/.test(value)) return 'Slug must be lowercase with hyphens or slashes.'
