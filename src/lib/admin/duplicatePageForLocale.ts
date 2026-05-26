@@ -5,6 +5,7 @@ import {
   coerceRelationshipId,
   relationshipIdsEqual,
 } from '@/lib/payload/coerceRelationshipId'
+import { ensureDbLayoutInstanceIds } from '@/lib/admin/ensureDbLayoutInstanceIds'
 import {
   sampleArrayRowIds,
   sanitizePageCopyForCreate,
@@ -177,8 +178,9 @@ export async function duplicatePageForLocale({
     dbLayout: sourcePage.dbLayout,
     contentBlocks: sourcePage.contentBlocks,
   })
+  const dbLayoutWithIds = ensureDbLayoutInstanceIds(sourcePage.dbLayout, [])
   const { dbLayout, contentBlocks } = sanitizePageCopyForCreate({
-    dbLayout: sourcePage.dbLayout,
+    dbLayout: dbLayoutWithIds,
     contentBlocks: sourcePage.contentBlocks,
   }) as {
     dbLayout: Page['dbLayout']

@@ -4,7 +4,9 @@ import { randomUUID } from 'crypto'
 import { coerceRelationshipId } from '@/lib/payload/coerceRelationshipId'
 import { normalizeBlockData } from '@/lib/blockData/normalizeBlockData'
 import { slugBeforeValidate } from '@/lib/payload/slug'
+import { ensureDbLayoutInstanceIds } from '@/lib/admin/ensureDbLayoutInstanceIds'
 import { propagatePageToEnabledLocalesAfterCreate } from '@/lib/admin/propagatePageToEnabledLocales'
+import { syncStructureToLocaleSiblingsAfterChange } from '@/lib/admin/syncStructureToLocaleSiblings'
 import { Testimonials } from '@/blocks/Generic/Testimonials/config'
 
 // import { OverviewField } from "@/fields/OverviewField";
@@ -62,7 +64,7 @@ export const Pages: CollectionConfig = {
       slugBeforeValidate('title', true),
     ],
     beforeChange: [
-      ({ data, operation, req }) => {
+      ({ data, operation, req, originalDoc }) => {
         if (data.locale != null && data.locale !== '') {
           data.locale = coerceRelationshipId(data.locale as string | number)
         }
@@ -79,6 +81,10 @@ export const Pages: CollectionConfig = {
           delete data.createLocaleOnSave
         }
         if (Array.isArray(data.dbLayout)) {
+          data.dbLayout = ensureDbLayoutInstanceIds(
+            data.dbLayout,
+            originalDoc?.dbLayout,
+          ) as typeof data.dbLayout
           for (const row of data.dbLayout) {
             if (row && typeof row === 'object' && 'data' in row) {
               const layoutRow = row as { data?: unknown }
@@ -89,7 +95,10 @@ export const Pages: CollectionConfig = {
         return data
       },
     ],
-    afterChange: [propagatePageToEnabledLocalesAfterCreate],
+    afterChange: [
+      propagatePageToEnabledLocalesAfterCreate,
+      syncStructureToLocaleSiblingsAfterChange,
+    ],
   },
   fields: [
     // ─── Sidebar ───────────────────────────────────────────────────────────
@@ -151,6 +160,20 @@ export const Pages: CollectionConfig = {
           'When saving a new page, optionally create draft copies in other languages.',
         components: {
           Field: '@/components/admin/CreateLocaleVariantsField#CreateLocaleVariantsField',
+        },
+      },
+    },
+    {
+      name: 'autoSyncStructureToLocales',
+      type: 'checkbox',
+      label: 'Auto-sync structure to locales',
+      defaultValue: false,
+      admin: {
+        position: 'sidebar',
+        description:
+          'Default locale only. When on, other locale pages mirror this page’s block layout; their translated content is preserved.',
+        components: {
+          Field: '@/components/admin/AutoSyncStructureField#AutoSyncStructureField',
         },
       },
     },

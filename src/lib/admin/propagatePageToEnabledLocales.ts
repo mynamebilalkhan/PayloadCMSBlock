@@ -10,6 +10,7 @@ import { duplicatePageForLocale } from '@/lib/admin/duplicatePageForLocale'
 import { SKIP_LOCALE_AUTO_CREATE } from '@/lib/admin/localePageConstants'
 
 export { SKIP_LOCALE_AUTO_CREATE } from '@/lib/admin/localePageConstants'
+// re-export for backwards compatibility if anything imported from here
 
 type LocaleDoc = {
   id: string | number
