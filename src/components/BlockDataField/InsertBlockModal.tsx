@@ -172,14 +172,18 @@ function BlockCard({
         transition: 'all 0.15s',
         boxShadow: selected ? '0 0 0 3px rgba(99,102,241,0.15)' : 'none',
         width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        // justifyContent: 'center',
+        alignItems: 'start',
       }}
     >
-      <div style={{ marginBottom: '0.625rem' }}>
+      <div style={{ marginBottom: '0.625rem', width: '100%' }}>
         <BlockPreviewImage block={block} height={80} selected={selected} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.25rem' }}>
-        <BlockIcon icon={block.icon} name={block.name} />
+        {/* <BlockIcon icon={block.icon} name={block.name} /> */}
         <span style={{ fontWeight: 600, fontSize: '0.8125rem', color: 'var(--theme-text, #111827)' }}>
           {block.name}
         </span>
@@ -191,7 +195,7 @@ function BlockCard({
         </p>
       )}
 
-      {block.category && (
+      {/* {block.category && (
         <span
           style={{
             display: 'inline-block',
@@ -208,7 +212,7 @@ function BlockCard({
         >
           {block.category}
         </span>
-      )}
+      )} */}
     </button>
   )
 }
@@ -437,10 +441,11 @@ export function InsertBlockModal({
                     border: '1px solid var(--theme-elevation-200, #d1d5db)',
                     borderRadius: '0.5rem',
                     fontSize: '0.875rem',
-                    color: 'var(--theme-text, #111827)',
+                    color: '#111827',
                     background: 'var(--theme-elevation-0, #fff)',
                     outline: 'none',
                     boxSizing: 'border-box',
+                    fontFamily: 'var(--font-body)',
                   }}
                 />
               </div>
@@ -461,8 +466,9 @@ export function InsertBlockModal({
                       background: activeCategory === cat.value ? '#eef2ff' : 'transparent',
                       color: activeCategory === cat.value ? '#4338ca' : 'var(--theme-elevation-600, #4b5563)',
                       fontSize: '0.8125rem',
-                      fontWeight: activeCategory === cat.value ? 600 : 400,
+                      fontWeight: activeCategory === cat.value ? 600 : 500,
                       cursor: 'pointer',
+                      fontFamily: 'var(--font-body)',
                     }}
                   >
                     {cat.label}
@@ -477,7 +483,7 @@ export function InsertBlockModal({
               )}
 
               {/* Recent blocks (only when not searching/filtering) */}
-              {!search && activeCategory === 'all' && recent.length > 0 && (
+              {/* {!search && activeCategory === 'all' && recent.length > 0 && (
                 <div style={{ marginBottom: '1.5rem' }}>
                   <h3 style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--theme-elevation-500, #6b7280)', margin: '0 0 0.625rem' }}>
                     Recent
@@ -493,7 +499,7 @@ export function InsertBlockModal({
                     ))}
                   </div>
                 </div>
-              )}
+              )} */}
 
               {/* All / filtered blocks */}
               <div>

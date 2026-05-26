@@ -135,7 +135,7 @@ export function BlockPreviewImage({
         style={{
           width,
           height,
-          objectFit: 'cover',
+          objectFit: 'contain',
           borderRadius: '0.375rem',
           display: 'block',
           background: '#f3f4f6',
@@ -181,7 +181,7 @@ export function BlockPreviewImage({
           <GenericCategoryWireframe block={block} selected={selected} />
         </div>
       )}
-      <div
+      {/* <div
         style={{
           position: 'absolute',
           top: 4,
@@ -197,7 +197,7 @@ export function BlockPreviewImage({
         }}
       >
         <BlockPreviewIcon icon={block.icon} name={block.name} />
-      </div>
+      </div> */}
     </div>
   )
 }
