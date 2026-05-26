@@ -103,7 +103,7 @@ export const BlockDefinitions: CollectionConfig = {
       label: 'Thumbnail',
       admin: {
         description:
-          'Preview image shown in the Insert Block modal and block picker UI.',
+          'Optional. Overrides the auto form-field wireframe preview in the section picker.',
       },
     },
     {

@@ -3,6 +3,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react'
 import type { BlockSchema } from '@/validation/types'
 import type { BlockPreset } from '@/blocks/types'
+import { BlockPreviewImage } from '@/components/admin/BlockPreviewImage'
+import { extractBlockSchema } from '@/lib/admin/schemaPreviewFields'
+import type { BlockSchema } from '@/validation/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -82,10 +85,12 @@ function PresetCard({
   preset,
   selected,
   onSelect,
+  blockSchema,
 }: {
   preset: BlockPreset
   selected: boolean
   onSelect: () => void
+  blockSchema?: BlockSchema | null
 }) {
   return (
     <button
@@ -104,37 +109,28 @@ function PresetCard({
         width: '100%',
       }}
     >
-      {preset.thumbnail ? (
-        <img
-          src={preset.thumbnail}
-          alt={preset.name}
-          style={{
-            width: '100%',
-            height: '80px',
-            objectFit: 'cover',
-            borderRadius: '0.25rem',
-            marginBottom: '0.5rem',
-            display: 'block',
-          }}
-        />
-      ) : (
-        <div
-          style={{
-            height: '64px',
-            borderRadius: '0.25rem',
-            background: 'linear-gradient(135deg, #e0e7ff, #ede9fe)',
-            marginBottom: '0.5rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#6366f1',
-            fontSize: '0.75rem',
-            fontWeight: 600,
-          }}
-        >
-          {preset.name}
-        </div>
-      )}
+      <div style={{ marginBottom: '0.5rem' }}>
+        {preset.thumbnail ? (
+          <img
+            src={preset.thumbnail}
+            alt={preset.name}
+            style={{
+              width: '100%',
+              height: '80px',
+              objectFit: 'cover',
+              borderRadius: '0.25rem',
+              display: 'block',
+            }}
+          />
+        ) : (
+          <BlockPreviewImage
+            block={{ name: preset.name, slug: preset.id, category: preset.category }}
+            schema={blockSchema}
+            height={80}
+            selected={selected}
+          />
+        )}
+      </div>
       <div style={{ fontWeight: 600, fontSize: '0.8125rem', color: 'var(--theme-text, #111827)', marginBottom: '0.2rem' }}>
         {preset.name}
       </div>
@@ -158,8 +154,6 @@ function BlockCard({
   selected: boolean
   onSelect: () => void
 }) {
-  const thumb = block.thumbnail?.url ?? block.previewImage?.url
-
   return (
     <button
       type="button"
@@ -180,40 +174,12 @@ function BlockCard({
         width: '100%',
       }}
     >
-      {thumb ? (
-        <img
-          src={thumb}
-          alt={block.name}
-          style={{
-            width: '100%',
-            height: '80px',
-            objectFit: 'cover',
-            borderRadius: '0.375rem',
-            marginBottom: '0.625rem',
-            display: 'block',
-            background: '#f3f4f6',
-          }}
-        />
-      ) : (
-        <div
-          style={{
-            height: '64px',
-            borderRadius: '0.375rem',
-            background: selected
-              ? 'linear-gradient(135deg, #c7d2fe, #ddd6fe)'
-              : 'linear-gradient(135deg, #f3f4f6, #e5e7eb)',
-            marginBottom: '0.625rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <BlockIcon icon={block.icon} name={block.name} />
-        </div>
-      )}
+      <div style={{ marginBottom: '0.625rem' }}>
+        <BlockPreviewImage block={block} height={80} selected={selected} />
+      </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', marginBottom: '0.25rem' }}>
-        {(!thumb) && <BlockIcon icon={block.icon} name={block.name} />}
+        <BlockIcon icon={block.icon} name={block.name} />
         <span style={{ fontWeight: 600, fontSize: '0.8125rem', color: 'var(--theme-text, #111827)' }}>
           {block.name}
         </span>
@@ -275,7 +241,7 @@ export function InsertBlockModal({
     if (!open) return
     setLoading(true)
     try {
-      const params = new URLSearchParams({ depth: '1', limit: '100' })
+      const params = new URLSearchParams({ depth: '2', limit: '100' })
       params.append('where[isDeprecated][not_equals]', 'true')
       if (allowedSlugs && allowedSlugs.length > 0) {
         allowedSlugs.forEach((slug, i) => params.append(`where[slug][in][${i}]`, slug))
@@ -629,6 +595,7 @@ export function InsertBlockModal({
                       <PresetCard
                         key={p.id}
                         preset={p}
+                        blockSchema={extractBlockSchema({ currentVersion: selected?.currentVersion })}
                         selected={selectedPreset?.id === p.id}
                         onSelect={() => setPreset(p)}
                       />

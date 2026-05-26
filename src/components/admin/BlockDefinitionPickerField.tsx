@@ -10,16 +10,13 @@ import {
 import type { RelationshipFieldClientComponent } from 'payload'
 
 import { ClientOnlyAdminField } from '@/components/admin/ClientOnlyAdminField'
+import { BlockPreviewImage } from '@/components/admin/BlockPreviewImage'
 import {
   InsertBlockModal,
   type BlockDefinitionDoc,
 } from '@/components/BlockDataField/InsertBlockModal'
 import { normalizeBlockData } from '@/lib/blockData/normalizeBlockData'
 import { coerceRelationshipId } from '@/lib/payload/coerceRelationshipId'
-
-function blockThumbUrl(block: BlockDefinitionDoc): string | undefined {
-  return block.thumbnail?.url ?? block.previewImage?.url ?? undefined
-}
 
 function SelectedBlockCard({
   block,
@@ -32,8 +29,6 @@ function SelectedBlockCard({
   onChange: () => void
   onClear: () => void
 }) {
-  const thumb = blockThumbUrl(block)
-
   return (
     <div
       style={{
@@ -46,37 +41,7 @@ function SelectedBlockCard({
         background: 'var(--theme-elevation-50, #f9fafb)',
       }}
     >
-      {thumb ? (
-        <img
-          src={thumb}
-          alt=""
-          style={{
-            width: 88,
-            height: 56,
-            objectFit: 'cover',
-            borderRadius: '0.375rem',
-            flexShrink: 0,
-          }}
-        />
-      ) : (
-        <div
-          style={{
-            width: 88,
-            height: 56,
-            borderRadius: '0.375rem',
-            background: 'linear-gradient(135deg, #e0e7ff, #ede9fe)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#6366f1',
-            fontWeight: 700,
-            fontSize: '0.75rem',
-            flexShrink: 0,
-          }}
-        >
-          {block.name.slice(0, 2).toUpperCase()}
-        </div>
-      )}
+      <BlockPreviewImage block={block} width={88} height={56} style={{ flexShrink: 0 }} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--theme-text, #111827)' }}>
           {block.name}
@@ -178,7 +143,7 @@ const BlockDefinitionPickerFieldContent: RelationshipFieldClientComponent = ({
   const fetchBlock = useCallback(async (id: string | number) => {
     setLoadingBlock(true)
     try {
-      const res = await fetch(`/api/block-definitions/${id}?depth=1`, { credentials: 'same-origin' })
+      const res = await fetch(`/api/block-definitions/${id}?depth=2`, { credentials: 'same-origin' })
       if (!res.ok) {
         setSelectedBlock(null)
         return
