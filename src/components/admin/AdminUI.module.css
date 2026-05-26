@@ -257,3 +257,45 @@
   font-family: var(--font-mono);
   font-size: 12px;
 }
+
+/* Locale page seed progress (blocking overlay) */
+.seedModalPanel {
+  width: min(420px, calc(100vw - 2rem));
+  padding: calc(var(--base) * 1.5);
+  border: 1px solid var(--theme-elevation-150);
+  border-radius: 6px;
+  background: var(--theme-elevation-0);
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.18);
+  text-align: center;
+}
+
+.seedSpinner {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto calc(var(--base) * 0.75);
+  border: 3px solid var(--theme-elevation-150);
+  border-top-color: var(--theme-text);
+  border-radius: 50%;
+  animation: adminSpin 0.75s linear infinite;
+}
+
+.seedModalTitle {
+  margin: 0 0 calc(var(--base) * 0.35);
+  color: var(--theme-text);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.seedModalText {
+  margin: 0;
+  color: var(--theme-elevation-500);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+@keyframes adminSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -5,6 +5,7 @@ import {
   SKIP_LOCALE_AUTO_CREATE,
   SKIP_LOCALE_STRUCTURE_SYNC,
 } from '@/lib/admin/localePageConstants'
+import { getDefaultLocaleId } from '@/lib/admin/getDefaultLocaleId'
 import { coerceRelationshipId, relationshipIdsEqual } from '@/lib/payload/coerceRelationshipId'
 
 type PageDoc = {
@@ -13,21 +14,6 @@ type PageDoc = {
   translationGroupId?: string | null
   autoSyncStructureToLocales?: boolean | null
   dbLayout?: unknown
-}
-
-async function getDefaultLocaleId(payload: Payload, req: PayloadRequest): Promise<string | number | null> {
-  const result = await payload.find({
-    collection: 'locales',
-    where: {
-      isDefault: { equals: true },
-      isEnabled: { equals: true },
-    },
-    limit: 1,
-    req,
-    overrideAccess: false,
-  })
-  const doc = result.docs[0] as { id?: string | number } | undefined
-  return doc?.id ?? null
 }
 
 export async function syncStructureToLocaleSiblings({

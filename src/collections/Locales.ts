@@ -2,14 +2,21 @@ import type { CollectionConfig } from 'payload'
 import { revalidateTag } from 'next/cache'
 import { SELECT_OPTIONS } from '@/lib/localesList'
 import { applyPresetToData } from '@/lib/locale/applyPreset'
+import { duplicateAllPagesOnLocaleSave } from '@/lib/admin/duplicateAllPagesOnLocaleSave'
 
 export const Locales: CollectionConfig = {
   slug: 'locales',
   admin: {
     useAsTitle: 'name',
     group: 'Site Settings',
-    description: 'Available languages/regions for the site. Controls locale routing and RTL support.',
+    description:
+      'Available languages/regions for the site. Saving a new enabled locale copies all pages from the default locale as drafts.',
     defaultColumns: ['name', 'code', 'isDefault', 'isEnabled', 'sortOrder'],
+    components: {
+      edit: {
+        SaveButton: '@/components/admin/LocaleSaveButton#LocaleSaveButton',
+      },
+    },
   },
   access: {
     read: () => true,
@@ -61,6 +68,7 @@ export const Locales: CollectionConfig = {
       },
     ],
     afterChange: [
+      duplicateAllPagesOnLocaleSave,
       () => {
         // Invalidate the cached locale list so middleware + utilities pick up changes
         try {
@@ -163,6 +171,17 @@ export const Locales: CollectionConfig = {
       defaultValue: 0,
       admin: {
         description: 'Lower number appears first in locale lists. Use 0 for the default locale.',
+      },
+    },
+    {
+      name: 'duplicatePagesFromDefault',
+      type: 'checkbox',
+      label: 'Copy pages from default locale on save',
+      defaultValue: true,
+      admin: {
+        description:
+          'When enabled, saving this locale creates draft copies of every default-locale page (same layout, placeholder titles). Uncheck to add the locale without copying pages.',
+        condition: (_, siblingData) => siblingData?.isDefault !== true,
       },
     },
   ],
