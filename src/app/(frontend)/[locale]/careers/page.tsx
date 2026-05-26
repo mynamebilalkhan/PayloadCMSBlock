@@ -53,7 +53,7 @@ export default function CareersPage() {
         <h2 className="reveal font-heading text-[clamp(1.3rem,2.5vw,1.8rem)] font-normal tracking-[0.01em] mb-6">
           Ready to build something that matters?
         </h2>
-        <a href="mailto:careers@nextbridge.com" className="reveal inline-block text-[0.82rem] font-medium tracking-[0.15em] uppercase text-nb-bg bg-nb-text px-10 py-4 no-underline transition-colors duration-200 hover:bg-nb-highlight">
+        <a href="mailto:careers@nextbridge.com" className="reveal inline-block text-nb-btn font-medium tracking-[0.15em] uppercase text-nb-bg bg-nb-text px-10 py-4 no-underline transition-colors duration-200 hover:bg-nb-highlight">
           Get in Touch
         </a>
       </RevealGroup>

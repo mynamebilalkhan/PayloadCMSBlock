@@ -40,7 +40,7 @@ function VoiceItem({ quote, name, company }: HomeVoiceItem) {
       <blockquote className="text-[1.05rem] font-normal leading-[1.65] text-nb-text mb-5 tracking-[-0.005em] not-italic">
         {quote}
       </blockquote>
-      <cite className="not-italic text-[0.82rem] font-normal text-nb-text-secondary block leading-[1.5]">
+      <cite className="not-italic text-nb-btn font-normal text-nb-text-secondary block leading-[1.5]">
         <strong className="font-medium text-nb-text block">{name}</strong>
         {company}
       </cite>

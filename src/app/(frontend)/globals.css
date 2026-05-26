@@ -1,23 +1,8 @@
 @import "tailwindcss";
 @import "../../styles/nextbridge.css";
 
-/* ── Reference design tokens (styles.css :root) ── */
+/* ── Fallback tokens (overridden by Global Styles in [locale]/layout) ── */
 :root {
-  --color-bg: #fafaf8;
-  --color-text: #1a1a18;
-  --color-text-secondary: #6b6b63;
-  --color-divider: #e0ded8;
-  --color-highlight: #c8a96e;
-  --color-dark: #1a1a18;
-  --color-dark-text: #fafaf8;
-  --color-dark-muted: #a8a89e;
-  --color-photo-bg: #e8e6e0;
-  --font: var(--font-dm-sans), 'DM Sans', -apple-system, sans-serif;
-  --font-heading: var(--font-michroma), 'Michroma', var(--font-dm-sans), 'DM Sans', sans-serif;
-}
-
-@theme {
-  /* ── Brand Colors (Tailwind nb-* utilities) ── */
   --color-nb-bg: #fafaf8;
   --color-nb-text: #1a1a18;
   --color-nb-text-secondary: #6b6b63;
@@ -28,11 +13,42 @@
   --color-nb-dark-muted: #a8a89e;
   --color-nb-photo-bg: #e8e6e0;
 
-  /* ── Font Families ── */
+  --color-bg: var(--color-nb-bg);
+  --color-text: var(--color-nb-text);
+  --color-text-secondary: var(--color-nb-text-secondary);
+  --color-divider: var(--color-nb-divider);
+  --color-highlight: var(--color-nb-highlight);
+  --color-dark: var(--color-nb-dark);
+  --color-dark-text: var(--color-nb-dark-text);
+  --color-dark-muted: var(--color-nb-dark-muted);
+  --color-photo-bg: var(--color-nb-photo-bg);
+
+  --font-size-base: 16px;
+  --line-height: 1.6;
   --font-family-sans: var(--font-dm-sans), 'DM Sans', -apple-system, system-ui, sans-serif;
   --font-family-heading: var(--font-michroma), 'Michroma', var(--font-dm-sans), 'DM Sans', sans-serif;
+  --font: var(--font-family-sans);
+  --font-heading: var(--font-family-heading);
+}
 
-  /* ── Custom Animations ── */
+@theme {
+  /* Tailwind nb-* utilities read runtime values from :root */
+  --color-nb-bg: var(--color-nb-bg);
+  --color-nb-text: var(--color-nb-text);
+  --color-nb-text-secondary: var(--color-nb-text-secondary);
+  --color-nb-divider: var(--color-nb-divider);
+  --color-nb-highlight: var(--color-nb-highlight);
+  --color-nb-dark: var(--color-nb-dark);
+  --color-nb-dark-text: var(--color-nb-dark-text);
+  --color-nb-dark-muted: var(--color-nb-dark-muted);
+  --color-nb-photo-bg: var(--color-nb-photo-bg);
+
+  --font-family-sans: var(--font-family-sans);
+  --font-family-heading: var(--font-family-heading);
+
+  /* CTA / button label size (replaces text-[0.82rem]) */
+  --text-nb-btn: 0.82rem;
+
   --animate-fade-up: fadeUp 1s ease forwards;
   --animate-pulse-line: pulseLine 2s ease infinite;
   --animate-blink: blink 2s ease infinite;
@@ -84,16 +100,71 @@
   transform: translateY(0);
 }
 
-/* ── Base ── */
-html {
-  scroll-behavior: smooth;
-  font-size: 16px;
-}
+/*
+ * Element typography must live in @layer base so Tailwind utilities
+ * (e.g. text-nb-btn, text-[0.82rem]) can override Global Styles defaults.
+ * Unlayered rules beat @layer utilities and were blocking button font sizes.
+ */
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    font-size: var(--font-size-base, 16px);
+  }
 
-body {
-  font-family: var(--font-family-sans);
-  background-color: var(--color-nb-bg);
-  color: var(--color-nb-text);
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
+  body {
+    font-family: var(--font-family-sans);
+    background-color: var(--color-nb-bg);
+    color: var(--color-nb-text);
+    line-height: var(--line-height, 1.6);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1 {
+    font-family: var(--font-h1, var(--font-family-heading));
+    font-size: var(--font-size-h1, 3.5rem);
+    font-weight: var(--font-weight-h1, 400);
+  }
+
+  h2 {
+    font-family: var(--font-h2, var(--font-family-heading));
+    font-size: var(--font-size-h2, 2.25rem);
+    font-weight: var(--font-weight-h2, 400);
+  }
+
+  h3 {
+    font-family: var(--font-h3, var(--font-family-heading));
+    font-size: var(--font-size-h3, 1.75rem);
+    font-weight: var(--font-weight-h3, 400);
+  }
+
+  h4 {
+    font-family: var(--font-h4, var(--font-family-heading));
+    font-size: var(--font-size-h4, 1.375rem);
+    font-weight: var(--font-weight-h4, 400);
+  }
+
+  h5 {
+    font-family: var(--font-h5, var(--font-family-heading));
+    font-size: var(--font-size-h5, 1.125rem);
+    font-weight: var(--font-weight-h5, 400);
+  }
+
+  h6 {
+    font-family: var(--font-h6, var(--font-family-heading));
+    font-size: var(--font-size-h6, 1rem);
+    font-weight: var(--font-weight-h6, 400);
+  }
+
+  p {
+    font-family: var(--font-p, var(--font-family-sans));
+    font-size: var(--font-size-p, 1rem);
+    font-weight: var(--font-weight-p, 400);
+  }
+
+  /* Default link typography; override with text-* / text-nb-btn utilities on CTAs */
+  a:not(:where([class*='text-'])) {
+    font-family: var(--font-a, var(--font-family-sans));
+    font-size: var(--font-size-a, inherit);
+    font-weight: var(--font-weight-a, 500);
+  }
 }

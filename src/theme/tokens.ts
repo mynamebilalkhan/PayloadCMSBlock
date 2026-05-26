@@ -10,12 +10,18 @@ export interface ThemeColors {
   surface: string
   text: string
   mutedText: string
+  divider: string
+  highlight: string
+  dark: string
+  darkText: string
+  darkMuted: string
+  photoBg: string
 }
 
 export interface ThemeTypographyTag {
-  font: string    // resolved CSS font-family stack, e.g. "'Inter', system-ui, sans-serif"
-  size: string    // e.g. "3.5rem"
-  weight: string  // e.g. "700"
+  font: string
+  size: string
+  weight: string
 }
 
 export interface ThemeTypography {
@@ -62,7 +68,11 @@ export interface ThemeTokens {
   layout: ThemeLayout
 }
 
-// ─── Default (design-system baseline) ────────────────────────────────────────
+// ─── Default (NEXTBRIDGE site baseline) ───────────────────────────────────────
+
+const BODY_FONT = "var(--font-dm-sans), 'DM Sans', system-ui, sans-serif"
+const HEADING_FONT =
+  "var(--font-michroma), 'Michroma', var(--font-dm-sans), 'DM Sans', sans-serif"
 
 const defaultTag = (font: string, size: string, weight: string): ThemeTypographyTag => ({
   font,
@@ -72,42 +82,48 @@ const defaultTag = (font: string, size: string, weight: string): ThemeTypography
 
 export const defaultTheme: ThemeTokens = {
   colors: {
-    primary: '#4f46e5',
-    secondary: '#7c3aed',
-    accent: '#06b6d4',
-    background: '#ffffff',
+    primary: '#1a1a18',
+    secondary: '#c8a96e',
+    accent: '#c8a96e',
+    background: '#fafaf8',
     surface: '#f9fafb',
-    text: '#111827',
-    mutedText: '#6b7280',
+    text: '#1a1a18',
+    mutedText: '#6b6b63',
+    divider: '#e0ded8',
+    highlight: '#c8a96e',
+    dark: '#1a1a18',
+    darkText: '#fafaf8',
+    darkMuted: '#a8a89e',
+    photoBg: '#e8e6e0',
   },
   typography: {
     baseFontSize: '16px',
     lineHeight: '1.6',
-    h1: defaultTag("'Inter', system-ui, sans-serif", '3.5rem', '700'),
-    h2: defaultTag("'Inter', system-ui, sans-serif", '2.5rem', '700'),
-    h3: defaultTag("'Inter', system-ui, sans-serif", '2rem',   '600'),
-    h4: defaultTag("'Inter', system-ui, sans-serif", '1.5rem', '600'),
-    h5: defaultTag("'Inter', system-ui, sans-serif", '1.25rem','600'),
-    h6: defaultTag("'Inter', system-ui, sans-serif", '1rem',   '600'),
-    p:  defaultTag("'Inter', system-ui, sans-serif", '1rem',   '400'),
-    a:  defaultTag("'Inter', system-ui, sans-serif", 'inherit','500'),
+    h1: defaultTag(HEADING_FONT, '3.5rem', '400'),
+    h2: defaultTag(HEADING_FONT, '2.25rem', '400'),
+    h3: defaultTag(HEADING_FONT, '1.75rem', '400'),
+    h4: defaultTag(HEADING_FONT, '1.375rem', '400'),
+    h5: defaultTag(HEADING_FONT, '1.125rem', '400'),
+    h6: defaultTag(HEADING_FONT, '1rem', '400'),
+    p: defaultTag(BODY_FONT, '1rem', '400'),
+    a: defaultTag(BODY_FONT, 'inherit', '500'),
   },
   spacing: {
-    sectionGap: '80px',
+    sectionGap: '96px',
     containerWidth: '1200px',
-    radius: '8px',
+    radius: '0px',
   },
   buttons: {
-    radius: '6px',
+    radius: '0px',
     appearance: 'solid',
     shadow: 'none',
   },
   shadows: {
-    card: 'sm',
-    overlay: 'xl',
+    card: 'none',
+    overlay: 'lg',
   },
   layout: {
-    sidePadding: '48px',
+    sidePadding: '64px',
     proseWidth: '800px',
   },
 }

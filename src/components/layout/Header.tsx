@@ -212,7 +212,7 @@ export function SiteHeader({
                         rel={child.openInNewTab ? 'noopener noreferrer' : undefined}
                         onClick={closeMobile}
                         className={[
-                          'block py-[0.65rem] pl-3 ml-1 text-[0.82rem] text-nb-text-secondary no-underline',
+                          'block py-[0.65rem] pl-3 ml-1 text-nb-btn text-nb-text-secondary no-underline',
                           'border-l border-nb-divider transition-colors duration-200',
                           'hover:text-nb-text hover:border-l-nb-highlight',
                           j === (item.children?.length ?? 0) - 1 ? 'mb-4' : '',

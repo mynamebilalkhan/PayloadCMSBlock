@@ -57,7 +57,7 @@ export default function StartAConversationPage() {
 
           <button
             type="submit"
-            className="reveal self-start text-[0.82rem] font-medium tracking-[0.15em] uppercase text-nb-bg bg-nb-text px-10 py-4 border-none cursor-pointer transition-colors duration-200 hover:bg-nb-highlight"
+            className="reveal self-start text-nb-btn font-medium tracking-[0.15em] uppercase text-nb-bg bg-nb-text px-10 py-4 border-none cursor-pointer transition-colors duration-200 hover:bg-nb-highlight"
           >
             Send
           </button>

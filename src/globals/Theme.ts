@@ -1,4 +1,10 @@
 import type { GlobalConfig } from 'payload'
+import { revalidateTag } from 'next/cache'
+import {
+  CUSTOM_FONT_SIZE,
+  isValidCssFontSize,
+  withCustomSizeOption,
+} from '@/theme/fontSize'
 
 // ─── Google Fonts catalogue ───────────────────────────────────────────────────
 // Value = exact Google Fonts family name (used verbatim in the API URL).
@@ -14,6 +20,7 @@ const FONT_OPTIONS = [
   { label: 'Montserrat',           value: 'Montserrat'        },
   { label: 'Nunito',               value: 'Nunito'            },
   { label: 'DM Sans',              value: 'DM Sans'           },
+  { label: 'Michroma',             value: 'Michroma'          },
   { label: 'Plus Jakarta Sans',    value: 'Plus Jakarta Sans' },
   { label: 'Outfit',               value: 'Outfit'            },
   { label: 'Sora',                 value: 'Sora'              },
@@ -48,6 +55,30 @@ const WEIGHT_OPTIONS = [
   { label: 'Black (900)',       value: '900' },
 ]
 
+function customSizeTextField() {
+  return {
+    name: 'sizeCustom',
+    type: 'text' as const,
+    label: 'Custom Font Size',
+    admin: {
+      width: '100%',
+      placeholder: 'e.g. 2.75rem, 44px, clamp(1rem, 2vw, 1.5rem)',
+      description: 'Any valid CSS length (px, rem, em, %, clamp, inherit).',
+      condition: (_: unknown, siblingData: Record<string, unknown>) =>
+        siblingData?.size === CUSTOM_FONT_SIZE,
+    },
+    validate: (value: unknown, { siblingData }: { siblingData?: Record<string, unknown> }) => {
+      if (siblingData?.size !== CUSTOM_FONT_SIZE) return true
+      const v = typeof value === 'string' ? value.trim() : ''
+      if (!v) return 'Enter a custom font size (e.g. 2.75rem or 44px).'
+      if (!isValidCssFontSize(v)) {
+        return 'Use a valid CSS size: px, rem, em, %, inherit, or clamp(...).'
+      }
+      return true
+    },
+  }
+}
+
 // Produces a collapsible group box for one HTML tag containing font / size / weight
 function tagTypographyGroup(
   tag: string,
@@ -69,15 +100,15 @@ function tagTypographyGroup(
             label: 'Font Family',
             options: FONT_OPTIONS,
             defaultValue: defaults.font,
-            admin: { width: '40%' },
+            admin: { width: '33.33%' },
           },
           {
             name: 'size',
             type: 'select' as const,
             label: 'Font Size',
-            options: sizeOptions,
+            options: withCustomSizeOption(sizeOptions),
             defaultValue: defaults.size,
-            admin: { width: '30%' },
+            admin: { width: '33.33%' },
           },
           {
             name: 'weight',
@@ -85,10 +116,11 @@ function tagTypographyGroup(
             label: 'Font Weight',
             options: WEIGHT_OPTIONS,
             defaultValue: defaults.weight,
-            admin: { width: '30%' },
+            admin: { width: '33.33%' },
           },
         ],
       },
+      customSizeTextField(),
     ],
   }
 }
@@ -107,7 +139,7 @@ function themeColorField(
     label,
     defaultValue,
     admin: {
-      width: '14.28%',
+      width: '20%',
       description,
       components: {
         Field: COLOR_FIELD_COMPONENT,
@@ -121,7 +153,15 @@ export const Theme: GlobalConfig = {
   label: 'Global Styles',
   admin: {
     group: 'Site Settings',
-    description: 'Centralized design tokens applied across all frontend blocks.',
+    description:
+      'Site-wide colors, type, and spacing. Changes apply to all pages using nb-* styles on the frontend.',
+  },
+  hooks: {
+    afterChange: [
+      () => {
+        revalidateTag('locale-globals')
+      },
+    ],
   },
   fields: [
     // ─── Colors ─────────────────────────────────────────────────────────────
@@ -134,46 +174,92 @@ export const Theme: GlobalConfig = {
           type: 'row',
           fields: [
             themeColorField(
-              'primary',
-              'Primary',
-              '#4f46e5',
-              'Brand color used for buttons, links, and highlights.',
-            ),
-            themeColorField(
-              'secondary',
-              'Secondary',
-              '#7c3aed',
-              'Complementary brand color for gradients and accents.',
-            ),
-            themeColorField(
-              'accent',
-              'Accent',
-              '#06b6d4',
-              'Used for badges, tags, and small decorative elements.',
-            ),
-            themeColorField(
               'background',
               'Page Background',
-              '#ffffff',
-              'Default background color of the page.',
-            ),
-            themeColorField(
-              'surface',
-              'Surface (Cards & Panels)',
-              '#f9fafb',
-              'Background color for cards, panels, and section stripes.',
+              '#fafaf8',
+              'Main page background (nb-bg).',
             ),
             themeColorField(
               'text',
               'Body Text',
-              '#111827',
-              'Default color for paragraphs and body copy.',
+              '#1a1a18',
+              'Primary text color (nb-text).',
             ),
             themeColorField(
               'mutedText',
-              'Muted / Secondary Text',
-              '#6b7280',
-              'Subtitles, captions, placeholder text, and helper copy.',
+              'Muted Text',
+              '#6b6b63',
+              'Secondary copy (nb-text-secondary).',
+            ),
+            themeColorField(
+              'divider',
+              'Dividers & Borders',
+              '#e0ded8',
+              'Borders and rules (nb-divider).',
+            ),
+            themeColorField(
+              'highlight',
+              'Brand Highlight',
+              '#c8a96e',
+              'Gold accent, hovers, links (nb-highlight).',
+            ),
+          ],
+        },
+        {
+          type: 'row',
+          fields: [
+            themeColorField(
+              'photoBg',
+              'Photo Placeholder',
+              '#e8e6e0',
+              'Image placeholder areas (nb-photo-bg).',
+            ),
+            themeColorField(
+              'dark',
+              'Dark Section BG',
+              '#1a1a18',
+              'Inverted section background (nb-dark).',
+            ),
+            themeColorField(
+              'darkText',
+              'Text on Dark',
+              '#fafaf8',
+              'Headings/body on dark sections.',
+            ),
+            themeColorField(
+              'darkMuted',
+              'Muted on Dark',
+              '#a8a89e',
+              'Secondary text on dark sections.',
+            ),
+            themeColorField(
+              'primary',
+              'CTA / Button Fill',
+              '#1a1a18',
+              'Primary buttons (e.g. solid CTAs).',
+            ),
+          ],
+        },
+        {
+          type: 'row',
+          fields: [
+            themeColorField(
+              'secondary',
+              'CTA Hover',
+              '#c8a96e',
+              'Button hover / secondary accent.',
+            ),
+            themeColorField(
+              'accent',
+              'Accent',
+              '#c8a96e',
+              'Decorative accent (same as highlight).',
+            ),
+            themeColorField(
+              'surface',
+              'Card Surface',
+              '#f9fafb',
+              'Optional light panels (legacy surface).',
             ),
           ],
         },
@@ -191,35 +277,64 @@ export const Theme: GlobalConfig = {
       fields: [
         // Base settings
         {
-          name: 'baseFontSize',
-          type: 'select',
-          label: 'Root Font Size (html)',
-          options: [
-            { label: '14 px', value: '14px' },
-            { label: '15 px', value: '15px' },
-            { label: '16 px (browser default)', value: '16px' },
-            { label: '17 px', value: '17px' },
-            { label: '18 px', value: '18px' },
+          type: 'row',
+          fields: [
+            {
+              name: 'baseFontSize',
+              type: 'select',
+              label: 'Root Font Size (html)',
+              options: withCustomSizeOption([
+                { label: '14 px', value: '14px' },
+                { label: '15 px', value: '15px' },
+                { label: '16 px (browser default)', value: '16px' },
+                { label: '17 px', value: '17px' },
+                { label: '18 px', value: '18px' },
+              ]),
+              defaultValue: '16px',
+              admin: { width: '50%', description: 'Sets 1 rem scale for the site.' },
+            },
+            {
+              name: 'lineHeight',
+              type: 'select',
+              label: 'Default Line Height',
+              options: [
+                { label: 'Tight — 1.3', value: '1.3' },
+                { label: 'Snug — 1.4', value: '1.4' },
+                { label: 'Normal — 1.5', value: '1.5' },
+                { label: 'Relaxed — 1.6', value: '1.6' },
+                { label: 'Loose — 1.8', value: '1.8' },
+              ],
+              defaultValue: '1.6',
+              admin: { width: '50%' },
+            },
           ],
-          defaultValue: '16px',
-          admin: { description: 'Sets 1 rem. All relative (rem) sizes scale with this value.' },
         },
         {
-          name: 'lineHeight',
-          type: 'select',
-          label: 'Default Line Height',
-          options: [
-            { label: 'Tight — 1.3',   value: '1.3' },
-            { label: 'Snug — 1.4',    value: '1.4' },
-            { label: 'Normal — 1.5',  value: '1.5' },
-            { label: 'Relaxed — 1.6', value: '1.6' },
-            { label: 'Loose — 1.8',   value: '1.8' },
+          type: 'row',
+          fields: [
+            {
+              name: 'baseFontSizeCustom',
+              type: 'text',
+              label: 'Custom Root Font Size',
+              admin: {
+                width: '100%',
+                placeholder: 'e.g. 15px or 1.0625rem',
+                condition: (_: unknown, siblingData: Record<string, unknown>) =>
+                  siblingData?.baseFontSize === CUSTOM_FONT_SIZE,
+              },
+              validate: (value: unknown, { siblingData }: { siblingData?: Record<string, unknown> }) => {
+                if (siblingData?.baseFontSize !== CUSTOM_FONT_SIZE) return true
+                const v = typeof value === 'string' ? value.trim() : ''
+                if (!v) return 'Enter a custom root font size.'
+                if (!isValidCssFontSize(v)) return 'Use a valid CSS size (px, rem, em, %).'
+                return true
+              },
+            },
           ],
-          defaultValue: '1.5',
         },
 
         // ── Per-tag groups ───────────────────────────────────────────────────
-        tagTypographyGroup('h1', 'H1 — Hero / Page Title', { font: 'Inter', size: '3.5rem', weight: '700' }, [
+        tagTypographyGroup('h1', 'H1 — Hero / Page Title', { font: 'Michroma', size: '3.5rem', weight: '400' }, [
           { label: '2.5 rem (40 px)', value: '2.5rem' },
           { label: '3 rem (48 px)',   value: '3rem'   },
           { label: '3.5 rem (56 px)', value: '3.5rem' },
@@ -228,7 +343,7 @@ export const Theme: GlobalConfig = {
           { label: '5 rem (80 px)',   value: '5rem'   },
         ]),
 
-        tagTypographyGroup('h2', 'H2 — Section Title', { font: 'Inter', size: '2.25rem', weight: '700' }, [
+        tagTypographyGroup('h2', 'H2 — Section Title', { font: 'Michroma', size: '2.25rem', weight: '400' }, [
           { label: '1.75 rem (28 px)', value: '1.75rem' },
           { label: '2 rem (32 px)',    value: '2rem'    },
           { label: '2.25 rem (36 px)', value: '2.25rem' },
@@ -236,7 +351,7 @@ export const Theme: GlobalConfig = {
           { label: '3 rem (48 px)',    value: '3rem'    },
         ]),
 
-        tagTypographyGroup('h3', 'H3 — Sub-section Title', { font: 'Inter', size: '1.75rem', weight: '600' }, [
+        tagTypographyGroup('h3', 'H3 — Sub-section Title', { font: 'Michroma', size: '1.75rem', weight: '400' }, [
           { label: '1.25 rem (20 px)', value: '1.25rem' },
           { label: '1.5 rem (24 px)',  value: '1.5rem'  },
           { label: '1.75 rem (28 px)', value: '1.75rem' },
@@ -244,7 +359,7 @@ export const Theme: GlobalConfig = {
           { label: '2.25 rem (36 px)', value: '2.25rem' },
         ]),
 
-        tagTypographyGroup('h4', 'H4 — Card / Widget Title', { font: 'Inter', size: '1.375rem', weight: '600' }, [
+        tagTypographyGroup('h4', 'H4 — Card / Widget Title', { font: 'Michroma', size: '1.375rem', weight: '400' }, [
           { label: '1.125 rem (18 px)', value: '1.125rem' },
           { label: '1.25 rem (20 px)',  value: '1.25rem'  },
           { label: '1.375 rem (22 px)', value: '1.375rem' },
@@ -252,21 +367,21 @@ export const Theme: GlobalConfig = {
           { label: '1.75 rem (28 px)',  value: '1.75rem'  },
         ]),
 
-        tagTypographyGroup('h5', 'H5 — Label / Caption Heading', { font: 'Inter', size: '1.125rem', weight: '600' }, [
+        tagTypographyGroup('h5', 'H5 — Label / Caption Heading', { font: 'Michroma', size: '1.125rem', weight: '400' }, [
           { label: '0.875 rem (14 px)', value: '0.875rem' },
           { label: '1 rem (16 px)',     value: '1rem'     },
           { label: '1.125 rem (18 px)', value: '1.125rem' },
           { label: '1.25 rem (20 px)',  value: '1.25rem'  },
         ]),
 
-        tagTypographyGroup('h6', 'H6 — Fine Label / Overline', { font: 'Inter', size: '1rem', weight: '600' }, [
+        tagTypographyGroup('h6', 'H6 — Fine Label / Overline', { font: 'Michroma', size: '1rem', weight: '400' }, [
           { label: '0.75 rem (12 px)',  value: '0.75rem'  },
           { label: '0.875 rem (14 px)', value: '0.875rem' },
           { label: '1 rem (16 px)',     value: '1rem'     },
           { label: '1.125 rem (18 px)', value: '1.125rem' },
         ]),
 
-        tagTypographyGroup('p', 'Paragraph (p)', { font: 'Inter', size: '1rem', weight: '400' }, [
+        tagTypographyGroup('p', 'Paragraph (p)', { font: 'DM Sans', size: '1rem', weight: '400' }, [
           { label: '0.875 rem (14 px)',  value: '0.875rem'  },
           { label: '1 rem (16 px)',      value: '1rem'      },
           { label: '1.0625 rem (17 px)', value: '1.0625rem' },
@@ -274,7 +389,7 @@ export const Theme: GlobalConfig = {
           { label: '1.25 rem (20 px)',   value: '1.25rem'   },
         ]),
 
-        tagTypographyGroup('a', 'Link (a)', { font: 'Inter', size: 'inherit', weight: '500' }, [
+        tagTypographyGroup('a', 'Link (a)', { font: 'DM Sans', size: 'inherit', weight: '500' }, [
           { label: 'Inherit from parent', value: 'inherit'  },
           { label: '0.875 rem (14 px)',   value: '0.875rem' },
           { label: '1 rem (16 px)',       value: '1rem'     },
