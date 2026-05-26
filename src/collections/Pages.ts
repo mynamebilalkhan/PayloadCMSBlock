@@ -287,7 +287,12 @@ export const Pages: CollectionConfig = {
                   required: true,
                   label: 'Section type',
                   admin: {
-                    description: 'What kind of section this is, e.g. Hero Banner or FAQ.',
+                    description:
+                      'What kind of section this is. Thumbnails come from each block’s Thumbnail in Block System.',
+                    components: {
+                      Field:
+                        '@/components/admin/BlockDefinitionPickerField#BlockDefinitionPickerField',
+                    },
                   },
                   filterOptions: {
                     isDeprecated: { not_equals: true },
@@ -300,8 +305,9 @@ export const Pages: CollectionConfig = {
                   required: true,
                   label: 'Section version',
                   admin: {
+                    hidden: true,
                     description:
-                      'Keeps this section compatible after schema updates. Usually auto-selected.',
+                      'Auto-set when you pick a section type. Pins schema compatibility for this row.',
                     condition: (_, siblingData) => Boolean(siblingData?.blockDefinition),
                   },
                   filterOptions: ({ siblingData }) => {

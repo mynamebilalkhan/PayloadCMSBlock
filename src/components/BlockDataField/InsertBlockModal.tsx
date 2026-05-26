@@ -24,10 +24,14 @@ export interface BlockDefinitionDoc {
 interface InsertBlockModalProps {
   open: boolean
   onClose: () => void
-  /** Called with the chosen block slug + optional preset data when editor confirms. */
-  onInsert: (blockType: string, presetData?: Record<string, unknown>) => void
+  /** Nested blocks field — slug + optional preset data when editor confirms. */
+  onInsert?: (blockType: string, presetData?: Record<string, unknown>) => void
+  /** Page section picker — block definition + optional preset data for section content. */
+  onSelectBlock?: (block: BlockDefinitionDoc, presetData?: Record<string, unknown>) => void
   /** Restrict to these slugs (allowedBlocks). Null = show all. */
   allowedSlugs?: string[] | null
+  title?: string
+  subtitle?: string
 }
 
 // ─── Category labels ──────────────────────────────────────────────────────────
@@ -249,7 +253,10 @@ export function InsertBlockModal({
   open,
   onClose,
   onInsert,
+  onSelectBlock,
   allowedSlugs,
+  title: titleProp,
+  subtitle: subtitleProp,
 }: InsertBlockModalProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
 
@@ -319,10 +326,14 @@ export function InsertBlockModal({
       ).catch(() => null)
       const list: BlockPreset[] = mod?.[`${toCamelCase(block.slug)}Presets`] ?? []
       setPresets(list)
+      if (onSelectBlock && list.length === 0) {
+        onSelectBlock(block, undefined)
+        onClose()
+        return
+      }
       if (list.length > 0) {
         setStep('pick-preset')
       } else {
-        // No presets — skip to insert with empty data
         setStep('pick-preset')
       }
     } catch {
@@ -335,7 +346,11 @@ export function InsertBlockModal({
 
   function handleInsert() {
     if (!selected) return
-    onInsert(selected.slug, selectedPreset?.data)
+    if (onSelectBlock) {
+      onSelectBlock(selected, selectedPreset?.data)
+    } else if (onInsert) {
+      onInsert(selected.slug, selectedPreset?.data)
+    }
     onClose()
   }
 
@@ -409,11 +424,13 @@ export function InsertBlockModal({
         <div style={headerStyle}>
           <div>
             <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--theme-text, #111827)' }}>
-              {step === 'pick-block' ? 'Add Block' : `Choose Preset — ${selected?.name}`}
+              {step === 'pick-block'
+                ? (titleProp ?? 'Add Block')
+                : `Choose Preset — ${selected?.name}`}
             </h2>
             <p style={{ margin: '0.1rem 0 0', fontSize: '0.8125rem', color: 'var(--theme-elevation-500, #6b7280)' }}>
               {step === 'pick-block'
-                ? 'Choose a block type to add to the layout'
+                ? (subtitleProp ?? 'Choose a block type to add to the layout')
                 : 'Pick a preset to start from, or insert blank'}
             </p>
           </div>
